@@ -3,6 +3,7 @@
 
 const http = require("http");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { execFile } = require("child_process");
 
@@ -147,12 +148,24 @@ async function listPRs(cwd) {
   });
 }
 
-function git(cwd, args) {
+function git(cwd, args, extraEnv) {
   return new Promise((resolve, reject) => {
-    execFile("git", ["-C", cwd, ...args], { maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
-      if (err) reject(err);
-      else resolve(stdout);
-    });
+    execFile(
+      "git",
+      ["-C", cwd, ...args],
+      {
+        maxBuffer: 4 * 1024 * 1024,
+        env: extraEnv ? { ...process.env, ...extraEnv } : process.env,
+      },
+      (err, stdout, stderr) => {
+        if (err) {
+          const msg = String(stderr || err.message || err)
+            .trim()
+            .split("\n")[0];
+          reject(new Error(msg || String(err)));
+        } else resolve(stdout);
+      }
+    );
   });
 }
 
@@ -314,7 +327,7 @@ async function projectData(project) {
 const LOG_FORMAT = [
   "--date=format:%d %b, %H:%M",
   "--shortstat",
-  "--pretty=format:%h\x1f%s\x1f%cr\x1f%an\x1f%cd",
+  "--pretty=format:%h\x1f%H\x1f%s\x1f%cr\x1f%an\x1f%cd\x1f%at",
 ];
 
 function parseCommits(log) {
@@ -324,8 +337,18 @@ function parseCommits(log) {
   const commits = [];
   for (const line of (log || "").split("\n")) {
     if (line.includes("\x1f")) {
-      const [hash, subject, when, author, date] = line.split("\x1f");
-      commits.push({ hash, subject, when, author, date, plus: null, minus: null });
+      const [hash, full, subject, when, author, date, at] = line.split("\x1f");
+      commits.push({
+        hash,
+        full,
+        subject,
+        when,
+        author,
+        date,
+        at: Number(at) || null,
+        plus: null,
+        minus: null,
+      });
     } else if (commits.length > 0 && line.includes("changed")) {
       const c = commits[commits.length - 1];
       const ins = line.match(/(\d+) insertion/);
@@ -335,6 +358,95 @@ function parseCommits(log) {
     }
   }
   return commits;
+}
+
+function clampUnix(at) {
+  const min = Date.parse("2005-04-07T00:00:00Z") / 1000;
+  const max = Date.now() / 1000 + 86400 * 2;
+  const n = Number(at);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(Math.min(max, Math.max(min, n)) / 60) * 60;
+}
+
+async function assertKnownWorktree(folder) {
+  const cwd = normalizeProjectPath(folder);
+  const st = await fs.promises.stat(cwd).catch(() => null);
+  if (!st || !st.isDirectory()) throw new Error("Unknown path");
+  const common = path.resolve(cwd, (await git(cwd, ["rev-parse", "--git-common-dir"])).trim());
+  for (const project of loadProjects()) {
+    try {
+      const projectCommon = path.resolve(
+        project.path,
+        (await git(project.path, ["rev-parse", "--git-common-dir"])).trim()
+      );
+      if (projectCommon === common) return cwd;
+    } catch {}
+  }
+  throw new Error("Path is not a tracked project");
+}
+
+async function rewriteCommitDate(cwd, rev, unixSeconds) {
+  const date = new Date(unixSeconds * 1000).toISOString();
+  const full = (await git(cwd, ["rev-parse", rev])).trim();
+  const head = (await git(cwd, ["rev-parse", "HEAD"])).trim();
+  const env = { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date };
+  const gitDir = path.resolve(cwd, (await git(cwd, ["rev-parse", "--git-dir"])).trim());
+  if (
+    fs.existsSync(path.join(gitDir, "rebase-merge")) ||
+    fs.existsSync(path.join(gitDir, "rebase-apply"))
+  ) {
+    throw new Error("Rebase already in progress");
+  }
+
+  const staged = (await git(cwd, ["diff", "--cached", "--name-only"])).trim();
+  if (staged) throw new Error("Staged changes — commit or unstage first");
+
+  if (full === head) {
+    await git(cwd, ["commit", "--amend", "--no-edit", "--date", date], env);
+    return;
+  }
+
+  const dirty = (await git(cwd, ["status", "--porcelain"])).trim();
+  let stashed = false;
+  if (dirty) {
+    await git(cwd, ["stash", "push", "--include-untracked", "-m", "worktrees-date-scrub"]);
+    stashed = true;
+  }
+
+  const seq = path.join(os.tmpdir(), "wt-seq-" + process.pid + ".js");
+  fs.writeFileSync(
+    seq,
+    'const fs=require("fs");const f=process.argv[process.argv.length-1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^pick /,"edit "));\n'
+  );
+
+  let onto = "--root";
+  try {
+    onto = (await git(cwd, ["rev-parse", full + "^"])).trim();
+  } catch {}
+
+  try {
+    const rebaseEnv = {
+      GIT_SEQUENCE_EDITOR: "node " + seq,
+      GIT_EDITOR: "true",
+      EDITOR: "true",
+      VISUAL: "true",
+    };
+    await git(
+      cwd,
+      onto === "--root"
+        ? ["rebase", "-i", "--root", "--committer-date-is-author-date"]
+        : ["rebase", "-i", onto, "--committer-date-is-author-date"],
+      rebaseEnv
+    );
+    await git(cwd, ["commit", "--amend", "--no-edit", "--date", date], env);
+    await git(cwd, ["rebase", "--continue"], { GIT_EDITOR: "true" });
+  } catch (err) {
+    await git(cwd, ["rebase", "--abort"]).catch(() => {});
+    throw err;
+  } finally {
+    fs.unlink(seq, () => {});
+    if (stashed) await git(cwd, ["stash", "pop"]).catch(() => {});
+  }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -385,6 +497,31 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: String(err.message).split("\n")[0] }));
     }
+    return;
+  }
+
+  if (url.pathname === "/api/commit-date" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 20000) req.destroy();
+    });
+    req.on("end", async () => {
+      try {
+        const payload = JSON.parse(body || "{}");
+        const hash = String(payload.hash || "");
+        const unix = clampUnix(payload.at);
+        if (!/^[0-9a-f]{4,40}$/i.test(hash) || unix == null) {
+          json(res, 400, { error: "Invalid hash or date" });
+          return;
+        }
+        const cwd = await assertKnownWorktree(payload.path);
+        await rewriteCommitDate(cwd, hash, unix);
+        json(res, 200, { ok: true, at: unix, date: formatTimestamp(unix * 1000) });
+      } catch (err) {
+        json(res, 500, { error: String(err.message || err).split("\n")[0] });
+      }
+    });
     return;
   }
 

@@ -141,6 +141,75 @@
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
     min-width: 7.6em;
+    position: relative;
+    user-select: none;
+  }
+  .stamp:has(.stamp-handle) { cursor: ew-resize; }
+  .stamp-value { position: relative; z-index: 1; }
+  /* Consistency-style hover handle: a 1px horizontal rule under the value. */
+  .stamp-handle {
+    position: absolute;
+    left: 12px;
+    right: 0;
+    top: 50%;
+    height: 14px;
+    transform: translateY(-50%);
+    z-index: 2;
+    touch-action: none;
+    cursor: ew-resize;
+  }
+  .stamp-handle-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 2px;
+    height: 1px;
+    transform: none;
+    background: currentColor;
+    outline: 1px solid #fff;
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+    pointer-events: none;
+  }
+  .stamp:hover .stamp-handle-line { opacity: 1; }
+  .stamp.scrubbing .stamp-handle-line { opacity: 0; }
+  body.stamp-scrub-active,
+  body.stamp-scrub-active * { cursor: none !important; }
+  .stamp-scrub-cursor {
+    position: fixed;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  .stamp-scrub-cursor-line {
+    position: absolute;
+    left: -28px;
+    top: -1px;
+    width: 56px;
+    height: 1px;
+    background: currentColor;
+    outline: 1px solid #fff;
+  }
+  .stamp-scrub-cursor-label {
+    position: absolute;
+    left: 32px;
+    top: -22px;
+    font-size: 11px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    background: color-mix(in srgb, currentColor 68%, #111);
+    padding: 3px 4px;
+    border-radius: 3px;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+  }
+  html.light-bg .stamp-scrub-cursor-label {
+    color: #111;
+    background: color-mix(in srgb, currentColor 42%, #fff);
   }
   /* Created dates sit on a full-opacity, weight-500 branch row. Same 0.5 as
      the shared .stamp — a notch above the old extra fade (0.375) so the
@@ -172,8 +241,8 @@
     min-width: 0;
   }
   .worktree .branch .bname {
-    flex: 1 1 6em;
-    min-width: 5em;
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     color: inherit;
@@ -182,18 +251,11 @@
     mask-image: linear-gradient(to right, #000 80%, transparent);
   }
   a.bname.draft { text-decoration: underline dashed; }
-  /* Dirty copy is long ("2 changed files · last touched …"). If it cannot
-     shrink, a 340px column leaves the name with zero width. */
+  .worktree .branch .dirty { flex-shrink: 0; }
   .worktree .branch .dirty {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
     font-size: 12px;
     font-weight: 400;
     opacity: 0.7;
-    -webkit-mask-image: linear-gradient(to right, #000 80%, transparent);
-    mask-image: linear-gradient(to right, #000 80%, transparent);
   }
   .worktree .empty,
   .log-body .empty {
@@ -393,6 +455,8 @@
   let stopLogPaging = null;
   let pendingRemove = null;
   let picking = false;
+  let stampScrubbing = false;
+  let stampCursorEl = null;
   const PAGE = 100;
 
   function el(tag, cls, text) {
@@ -400,6 +464,214 @@
     if (cls) node.className = cls;
     if (text != null) node.textContent = text;
     return node;
+  }
+
+  const SCRUB_THRESHOLD = 3;
+  const SCRUB_PX_PER_MINUTE = 4;
+  const SCRUB_BODY_CLASS = "stamp-scrub-active";
+
+  function formatStamp(ms) {
+    const d = new Date(ms);
+    return (
+      String(d.getDate()).padStart(2, "0") +
+      " " +
+      d.toLocaleString("en", { month: "short" }) +
+      ", " +
+      String(d.getHours()).padStart(2, "0") +
+      ":" +
+      String(d.getMinutes()).padStart(2, "0")
+    );
+  }
+
+  function beginPointerCaptureDrag(options) {
+    const { target, pointerId, onMove, onEnd } = options;
+    const supportsCapture =
+      typeof target.setPointerCapture === "function" &&
+      typeof target.releasePointerCapture === "function";
+    let active = true;
+    const owns = (event) => event.pointerId === pointerId;
+    const removeListeners = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleCancel);
+      if (supportsCapture) target.removeEventListener("lostpointercapture", handleLost);
+    };
+    const releaseCapture = () => {
+      if (!supportsCapture) return;
+      try {
+        if (typeof target.hasPointerCapture === "function" && !target.hasPointerCapture(pointerId))
+          return;
+        target.releasePointerCapture(pointerId);
+      } catch {}
+    };
+    const finish = (event, reason) => {
+      if (!active) return;
+      active = false;
+      removeListeners();
+      if (reason !== "lostpointercapture") releaseCapture();
+      onEnd(event, reason);
+    };
+    const handleMove = (event) => {
+      if (active && owns(event)) onMove(event);
+    };
+    const handleUp = (event) => {
+      if (active && owns(event)) finish(event, "pointerup");
+    };
+    const handleCancel = (event) => {
+      if (active && owns(event)) finish(event, "pointercancel");
+    };
+    const handleLost = (event) => {
+      if (active && owns(event)) finish(event, "lostpointercapture");
+    };
+    if (supportsCapture) {
+      try {
+        target.setPointerCapture(pointerId);
+      } catch {}
+    }
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleCancel);
+    if (supportsCapture) target.addEventListener("lostpointercapture", handleLost);
+    return () => {
+      if (!active) return;
+      active = false;
+      removeListeners();
+      releaseCapture();
+    };
+  }
+
+  function showStampCursor(x, y, text, color) {
+    if (!stampCursorEl) {
+      stampCursorEl = el("div", "stamp-scrub-cursor");
+      stampCursorEl.appendChild(el("span", "stamp-scrub-cursor-line"));
+      stampCursorEl.appendChild(el("span", "stamp-scrub-cursor-label"));
+      document.body.appendChild(stampCursorEl);
+    }
+    stampCursorEl.style.left = x + "px";
+    stampCursorEl.style.top = y + "px";
+    stampCursorEl.style.color = color || "";
+    stampCursorEl.querySelector(".stamp-scrub-cursor-label").textContent = text;
+  }
+
+  function hideStampCursor() {
+    if (!stampCursorEl) return;
+    stampCursorEl.remove();
+    stampCursorEl = null;
+  }
+
+  function bindStampScrub(stamp, commit, ctx) {
+    const hit = stamp.querySelector(".stamp-handle");
+    const valueEl = stamp.querySelector(".stamp-value");
+    if (!hit || !valueEl || !commit.at || !ctx || !ctx.path || !commit.full) return;
+
+    hit.addEventListener("pointerdown", (event) => {
+      if (!event.isPrimary || event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const startAt = Number(commit.at);
+      const color = getComputedStyle(stamp).color;
+      const target = event.currentTarget;
+      let didDrag = false;
+      let lastAt = startAt;
+      let accumulated = 0;
+      let lastClientX = startX;
+
+      beginPointerCaptureDrag({
+        target,
+        pointerId: event.pointerId,
+        onMove: (moveEvent) => {
+          const raw =
+            typeof moveEvent.movementX === "number" && Number.isFinite(moveEvent.movementX)
+              ? moveEvent.movementX
+              : moveEvent.clientX - lastClientX;
+          lastClientX = moveEvent.clientX;
+          accumulated += raw;
+          if (!didDrag && Math.abs(accumulated) < SCRUB_THRESHOLD) return;
+          if (!didDrag) {
+            didDrag = true;
+            stampScrubbing = true;
+            stamp.classList.add("scrubbing");
+            document.body.classList.add(SCRUB_BODY_CLASS);
+            showStampCursor(startX, startY, formatStamp(startAt * 1000), color);
+          }
+          const unit = moveEvent.altKey ? 86400 : moveEvent.shiftKey ? 3600 : 60;
+          const steps = Math.round(accumulated / SCRUB_PX_PER_MINUTE);
+          const min = Date.parse("2005-04-07T00:00:00Z") / 1000;
+          const max = Date.now() / 1000 + 86400;
+          const nextAt = Math.round(Math.min(max, Math.max(min, startAt + steps * unit)) / 60) * 60;
+          if (nextAt === lastAt) return;
+          lastAt = nextAt;
+          commit.at = nextAt;
+          commit.date = formatStamp(nextAt * 1000);
+          valueEl.textContent = commit.date;
+          const row = stamp.closest("li");
+          if (row) row.title = commit.subject + " — " + commit.author + ", " + commit.date;
+          showStampCursor(startX, startY, commit.date, color);
+        },
+        onEnd: async (_event, reason) => {
+          document.body.classList.remove(SCRUB_BODY_CLASS);
+          stamp.classList.remove("scrubbing");
+          hideStampCursor();
+          const revert = () => {
+            commit.at = startAt;
+            commit.date = formatStamp(startAt * 1000);
+            valueEl.textContent = commit.date;
+            stampScrubbing = false;
+          };
+          if (!didDrag) {
+            stampScrubbing = false;
+            return;
+          }
+          if (reason !== "pointerup" || lastAt === startAt) {
+            revert();
+            return;
+          }
+          try {
+            const res = await fetch("/api/commit-date", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ path: ctx.path, hash: commit.full, at: lastAt }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || String(res.status));
+            commit.at = data.at || lastAt;
+            commit.date = data.date || formatStamp(commit.at * 1000);
+            valueEl.textContent = commit.date;
+            stampScrubbing = false;
+            await load();
+          } catch (err) {
+            revert();
+            title.textContent = "Could not rewrite date";
+            title.classList.add("fail");
+          }
+        },
+      });
+    });
+  }
+
+  function stampEl(commit, ctx) {
+    const stamp = el("span", "stamp");
+    stamp.appendChild(el("span", "stamp-value", commit.date));
+    if (commit.at && ctx && ctx.path && commit.full) {
+      const handle = el("span", "stamp-handle");
+      handle.appendChild(el("span", "stamp-handle-line"));
+      stamp.appendChild(handle);
+      bindStampScrub(stamp, commit, ctx);
+    }
+    return stamp;
+  }
+
+  function commitLi(commit, ctx) {
+    const li = el("li");
+    li.appendChild(el("span", "hash", commit.hash));
+    li.appendChild(el("span", "subject", commit.subject));
+    li.appendChild(diffEl(commit));
+    li.appendChild(stampEl(commit, ctx));
+    li.title = commit.subject + " — " + commit.author + ", " + commit.date;
+    return li;
   }
 
   // --c is the raw pastel; CSS darkens it when html.light-bg is on.
@@ -604,6 +876,10 @@
   }
 
   function render(data) {
+    if (stampScrubbing) {
+      latest = data;
+      return;
+    }
     latest = data;
     renderSettingsProjects();
     if (
@@ -725,15 +1001,8 @@
 
         if (commits.length > 0) {
           const ul = el("ul");
-          for (const c of commits) {
-            const li = el("li");
-            li.appendChild(el("span", "hash", c.hash));
-            li.appendChild(el("span", "subject", c.subject));
-            li.appendChild(diffEl(c));
-            li.appendChild(el("span", "stamp", c.date));
-            li.title = c.subject + " — " + c.author + ", " + c.date;
-            ul.appendChild(li);
-          }
+          const ctx = { path: wt.path, project: project.name };
+          for (const c of commits) ul.appendChild(commitLi(c, ctx));
           div.appendChild(ul);
         }
         section.appendChild(div);
@@ -750,6 +1019,7 @@
   }
 
   async function load() {
+    if (stampScrubbing) return;
     try {
       const res = await fetch("/api/data");
       if (!res.ok) throw new Error(String(res.status));
@@ -803,15 +1073,7 @@
           hasMore = false;
           return;
         }
-        for (const c of data.commits) {
-          const li = el("li");
-          li.appendChild(el("span", "hash", c.hash));
-          li.appendChild(el("span", "subject", c.subject));
-          li.appendChild(diffEl(c));
-          li.appendChild(el("span", "stamp", c.date));
-          li.title = c.subject + " — " + c.author + ", " + c.date;
-          ul.appendChild(li);
-        }
+        for (const c of data.commits) ul.appendChild(commitLi(c, { path: project.path }));
         skip += PAGE;
         hasMore = !!data.hasMore;
         if (skip === PAGE && data.commits.length === 0) {
@@ -858,6 +1120,10 @@
   });
 
   document.addEventListener("mousemove", (e) => {
+    if (stampScrubbing) {
+      document.documentElement.classList.remove("side-west", "side-east");
+      return;
+    }
     const dir = sideDir(e);
     const act = dir ? sideAction(dir) : null;
     document.documentElement.classList.toggle("side-west", !!(act && dir < 0));
