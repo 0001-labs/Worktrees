@@ -184,6 +184,12 @@
       opacity: 0.9;
     }
   }
+  /* Download links sit inside normal copy; the underline is the affordance. */
+  .project a.dl {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 </style>
 
 <header>
@@ -196,6 +202,7 @@
     <h2>Run</h2>
     <p>node server.js</p>
     <p>http://localhost:4777</p>
+    <p><a href="/download/mac" class="dl">or download the Mac app</a></p>
   </section>
   <section class="sgroup">
     <h2>Features</h2>
@@ -227,6 +234,12 @@
     <h2>Worktrees</h2>
     <div class="count">local dashboard</div>
     <p>A local dashboard of every open git worktree. One board for all your projects — branches, unique commits, pull requests, and dirty files.</p>
+  </section>
+  <section class="project" id="download" style="--c:#a6d9c9">
+    <h2><a href="/download/mac" class="dl">Download</a></h2>
+    <div class="count">macOS · Apple Silicon</div>
+    <p><a href="/download/mac" class="dl">Worktrees for Mac</a> — the whole dashboard as a frameless app. Open it and the board is just there; no terminal, no browser tab.</p>
+    <p>The app is not notarized yet: on first launch macOS will object, and you approve it once under System Settings → Privacy &amp; Security → “Open Anyway”.</p>
   </section>
   <section class="project" id="board-feature" style="--c:#d6cfc1">
     <h2>The board</h2>
