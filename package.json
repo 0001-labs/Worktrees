@@ -1,0 +1,8 @@
+{
+  "name": "worktrees-site",
+  "private": true,
+  "scripts": {
+    "build": "rm -rf dist && mkdir dist && cp site.html dist/index.html && cp background-*.png dist/",
+    "deploy": "bun run build && bunx wrangler deploy"
+  }
+}

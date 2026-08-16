@@ -1,0 +1,10 @@
+{
+  "name": "worktrees-site",
+  "compatibility_date": "2026-08-18",
+  "assets": {
+    "directory": "./dist"
+  },
+  "routes": [
+    { "pattern": "worktrees.0001.dev", "custom_domain": true }
+  ]
+}

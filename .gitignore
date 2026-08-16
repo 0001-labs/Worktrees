@@ -12,3 +12,7 @@ node_modules/
 # Neighboring project worktrees — not part of this dashboard
 Woodstock/
 Thailand Tours/
+
+# Pages deploy output
+dist/
+
