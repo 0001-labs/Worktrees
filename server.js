@@ -478,10 +478,14 @@ const server = http.createServer(async (req, res) => {
     });
     return;
   }
-  fs.readFile(path.join(__dirname, "index.html"), (err, html) => {
+  const page =
+    url.pathname === "/site" || url.pathname === "/site.html"
+      ? "site.html"
+      : "index.html";
+  fs.readFile(path.join(__dirname, page), (err, html) => {
     if (err) {
       res.writeHead(500);
-      res.end("index.html missing");
+      res.end(page + " missing");
       return;
     }
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });

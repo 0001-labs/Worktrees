@@ -1,0 +1,417 @@
+<title>Worktrees by 0001</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { background: #000; }
+  html.light-bg { background: #e6e1d6; }
+  body { background: transparent; }
+  #bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: #000 center / cover no-repeat;
+    pointer-events: none;
+  }
+  html.light-bg #bg { background-color: #e6e1d6; }
+  #bg.flip { transform: rotate(180deg); }
+  #bg.dither-fine::before,
+  #bg.dither-poster::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  #bg.dither-fine::before {
+    opacity: 0.4;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+  }
+  #bg.light.dither-fine::before {
+    mix-blend-mode: multiply;
+    opacity: 0.28;
+  }
+  #bg.dither-poster {
+    filter: contrast(1.65) saturate(0.4) brightness(1.03);
+  }
+  #bg.dither-poster::before {
+    opacity: 0.22;
+    mix-blend-mode: hard-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 80px 80px;
+  }
+  #bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+  }
+  #bg.light::after {
+    background: rgba(255, 250, 242, 0.22);
+  }
+  html.light-bg .project {
+    color: color-mix(in srgb, var(--c, currentColor) 52%, #1a1410);
+  }
+  html.light-bg .project .count,
+  html.light-bg .hash {
+    opacity: 0.7;
+  }
+  html.light-bg .project p { opacity: 0.88; }
+  body {
+    font-family: "GT America", "GT America Standard", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #fff;
+    padding: 48px 40px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 40px;
+  }
+  header h1 {
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: #545454;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  header h1.pressed { color: #111; }
+  header .meta { font-size: 13px; color: #666; }
+  #board {
+    columns: 340px;
+    column-gap: 48px;
+    width: calc(100% - 340px - 48px);
+  }
+  .project {
+    break-inside: avoid;
+    padding-bottom: 44px;
+    color: var(--c);
+  }
+  .project h2 {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    display: inline-block;
+  }
+  .project .count { font-size: 13px; opacity: 0.55; padding-bottom: 22px; }
+  .project p {
+    font-size: 13px;
+    line-height: 1.45;
+    opacity: 0.75;
+  }
+  .project p + p { margin-top: 4px; }
+  .k {
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: inherit;
+    opacity: 0.55;
+  }
+  #settings-page {
+    display: grid;
+    gap: 40px;
+    align-content: start;
+  }
+  .sgroup h2 { font-size: 16px; font-weight: 500; margin-bottom: 14px; color: #111; }
+  #cycle-bg { cursor: pointer; }
+  .sgroup p {
+    font-size: 13px;
+    color: #545454;
+    line-height: 1.45;
+    max-width: 340px;
+    padding: 4px 0;
+  }
+  .sgroup label {
+    display: block;
+    position: relative;
+    font-size: 13px;
+    color: #545454;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: color 0.15s ease;
+  }
+  .sgroup label:hover { color: #6a6a6a; }
+  .sgroup label:has(input:checked) { color: #ccc; }
+  .sgroup label:has(input:checked):hover { color: #ddd; }
+  html.light-bg .sgroup label:has(input:checked) { color: #111; }
+  html.light-bg .sgroup label:has(input:checked):hover { color: #000; }
+  .sgroup label input {
+    appearance: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .plist { list-style: none; width: 340px; }
+  .plist a {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    font-size: 13px;
+    padding: 4px 0;
+    color: var(--c);
+    text-decoration: none;
+  }
+  .plist .pname { flex: 1; }
+  #emoji-rain {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  #emoji-rain .drop {
+    position: absolute;
+    top: 0;
+    line-height: 1;
+    will-change: transform;
+    animation: emoji-fall linear forwards;
+    user-select: none;
+  }
+  @keyframes emoji-fall {
+    0% {
+      transform: translate3d(0, -12vh, 0) rotate(0deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translate3d(var(--drift, 0px), 112vh, 0) rotate(var(--spin, 360deg));
+      opacity: 0.9;
+    }
+  }
+</style>
+
+<header>
+  <h1>Worktrees</h1>
+  <div class="meta"></div>
+</header>
+<div id="bg"></div>
+<div id="settings-page" hidden>
+  <section class="sgroup">
+    <h2>Run</h2>
+    <p>node server.js</p>
+    <p>http://localhost:4777</p>
+  </section>
+  <section class="sgroup">
+    <h2>Features</h2>
+    <ul class="plist">
+      <li><a href="#what" style="--c:#c1b6dd"><span class="pname">Worktrees</span></a></li>
+      <li><a href="#board-feature" style="--c:#d6cfc1"><span class="pname">The board</span></a></li>
+      <li><a href="#branches" style="--c:#a6d9c9"><span class="pname">Branches</span></a></li>
+      <li><a href="#commits" style="--c:#c9d9a6"><span class="pname">Commits</span></a></li>
+      <li><a href="#focus" style="--c:#b2bddd"><span class="pname">Focus</span></a></li>
+      <li><a href="#history" style="--c:#ded5a1"><span class="pname">History</span></a></li>
+      <li><a href="#projects" style="--c:#dfaec9"><span class="pname">Projects</span></a></li>
+      <li><a href="#atmosphere" style="--c:#a8d6ae"><span class="pname">Atmosphere</span></a></li>
+      <li><a href="#live" style="--c:#abcfd9"><span class="pname">Live</span></a></li>
+    </ul>
+  </section>
+  <section class="sgroup">
+    <h2 id="cycle-bg">Background</h2>
+    <label><input type="radio" name="dither" value="fine" /> Fine dither</label>
+    <label><input type="radio" name="dither" value="poster" /> Posterized</label>
+    <label><input type="radio" name="dither" value="none" /> None</label>
+  </section>
+  <section class="sgroup">
+    <h2>Orientation</h2>
+    <label><input type="checkbox" id="bg-flip" /> Upside down</label>
+  </section>
+</div>
+<main id="board">
+  <section class="project" id="what" style="--c:#c1b6dd">
+    <h2>Worktrees</h2>
+    <div class="count">local dashboard</div>
+    <p>A local dashboard of every open git worktree. One board for all your projects — branches, unique commits, pull requests, and dirty files.</p>
+  </section>
+  <section class="project" id="board-feature" style="--c:#d6cfc1">
+    <h2>The board</h2>
+    <div class="count">columns</div>
+    <p>Every project is a column. Under it: the git worktrees that are actually open — extra checkouts of that repo, each on its own branch.</p>
+    <p>The main folder you cloned is not counted as a worktree. If a project has none, it stays off the board. You can still see it in settings.</p>
+    <p>Each project has its own pastel. Columns are 340px wide and fill leftover space; the last column of the page is always left empty.</p>
+  </section>
+  <section class="project" id="branches" style="--c:#a6d9c9">
+    <h2>Branches</h2>
+    <div class="count">name, PR, dirty, created</div>
+    <p>Each worktree is listed by its branch name, in the same rhythm as a commit row.</p>
+    <p>If that branch has an open pull request on GitHub, the name is a link. A draft PR is underlined with dashes.</p>
+    <p>Uncommitted work shows as “3 changed files”, plus when you last touched them. The date on the right is when the worktree was created.</p>
+  </section>
+  <section class="project" id="commits" style="--c:#c9d9a6">
+    <h2>Commits</h2>
+    <div class="count">unique to the tree</div>
+    <p>You only see commits that are not already on the main branch. Shared history does not repeat under every tree. Merge commits stay off the board.</p>
+    <p><span class="k">+12</span> is lines added, in the project color. <span class="k">−4</span> is lines removed, in grey. Zero counts are omitted.</p>
+    <p>If the branch name contains an ID like <span class="k">Mf42tC-3</span>, only commits that mention that ID are listed.</p>
+  </section>
+  <section class="project" id="focus" style="--c:#b2bddd">
+    <h2>Focus</h2>
+    <div class="count">click to isolate</div>
+    <p>Click a project name to hide everything else. The other columns stay in place so nothing jumps.</p>
+    <p>Click the “2 worktrees” line to look at one tree at a time.</p>
+    <p>Click in the empty space to the left or right of the column to move to the previous or next project. Press Escape to walk back one step.</p>
+  </section>
+  <section class="project" id="history" style="--c:#ded5a1">
+    <h2>History</h2>
+    <div class="count">full log</div>
+    <p>Click the project name a second time to read the full git log — hash, subject, diff, date — same as the board, just longer.</p>
+    <p>Keep scrolling to load more, a hundred commits at a time. Click the branch count to switch which branch you are reading.</p>
+    <p>Click the name again to return to the full board.</p>
+  </section>
+  <section class="project" id="projects" style="--c:#dfaec9">
+    <h2>Projects</h2>
+    <div class="count">add and remove</div>
+    <p>Click the Worktrees title (top left) to open settings.</p>
+    <p>Click Projects to add a folder with the macOS picker. Click a project to remove it — it asks Yes / No, and never deletes the folder on disk.</p>
+    <p>The list lives in <span class="k">projects.json</span>. Git is never rewritten.</p>
+  </section>
+  <section class="project" id="atmosphere" style="--c:#a8d6ae">
+    <h2>Atmosphere</h2>
+    <div class="count">picture, dither, flip</div>
+    <p>Click Background to cycle the picture: flower, Night bloom, Black pine, Daylight.</p>
+    <p>Choose Fine dither, Posterized, or None. Check Upside down to flip the picture. Daylight is the light theme.</p>
+    <p>The picture is remembered in this browser.</p>
+  </section>
+  <section class="project" id="live" style="--c:#abcfd9">
+    <h2>Live</h2>
+    <div class="count">every ten seconds</div>
+    <p>The board reloads from git every ten seconds. A failed poll turns the title red; the next tick recovers on its own.</p>
+    <p>Pull requests come from the <span class="k">gh</span> CLI, cached two minutes per repo. Pankado remotes use JAS-Pankado; everything else uses Jo4712.</p>
+    <p>Local only. Run <span class="k">node server.js</span>, then open <span class="k">http://localhost:4777</span>.</p>
+  </section>
+</main>
+
+<script>
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  const title = document.querySelector("header h1");
+  const bg = document.getElementById("bg");
+  const panel = document.getElementById("settings-page");
+  const manual = document.getElementById("board");
+  const flipBox = document.getElementById("bg-flip");
+  const stored = JSON.parse(localStorage.getItem("wt-settings") || "{}");
+  if (stored.motive == null && ["a", "b", "c"].includes(stored.bg))
+    stored.motive = stored.bg;
+  delete stored.bg;
+  if (!stored.v4bg && ["a", "b", "c"].includes(stored.motive)) {
+    stored.motive = { a: "b", b: "c", c: "d" }[stored.motive];
+    stored.v4bg = 1;
+  }
+  const settings = Object.assign(
+    { motive: "a", dither: "fine", flip: true },
+    stored
+  );
+
+  const MOTIVE_ORDER = ["a", "b", "c", "d"];
+  const DITHER_ORDER = ["fine", "poster", "none"];
+  function applySettings() {
+    if (!MOTIVE_ORDER.includes(settings.motive)) settings.motive = "a";
+    if (!DITHER_ORDER.includes(settings.dither)) settings.dither = "fine";
+    const light = settings.motive === "d";
+    bg.style.backgroundImage = `url("background-${settings.motive}.png?v=5")`;
+    bg.classList.toggle("flip", settings.flip);
+    bg.classList.toggle("light", light);
+    bg.classList.toggle("dither-fine", settings.dither === "fine");
+    bg.classList.toggle("dither-poster", settings.dither === "poster");
+    document.documentElement.classList.toggle("light-bg", light);
+    document.querySelectorAll('input[name="dither"]').forEach((r) => {
+      r.checked = r.value === settings.dither;
+    });
+    flipBox.checked = settings.flip;
+    localStorage.setItem("wt-settings", JSON.stringify(settings));
+  }
+
+  function toggleSettings(open) {
+    const on = open != null ? open : panel.hidden;
+    panel.hidden = !on;
+    manual.hidden = on;
+    title.classList.toggle("pressed", on);
+  }
+  title.addEventListener("click", () => toggleSettings());
+  document.querySelectorAll(".plist a").forEach((a) => {
+    a.addEventListener("click", () => toggleSettings(false));
+  });
+
+  const RAIN_EMOJIS = ["🌳", "🌲", "🌴", "🌳", "🌲", "🌴", "👜", "💼"];
+  let rainArmTimer = null;
+  let rainSpawnTimer = null;
+  let rainStopTimer = null;
+  let rainOverlay = null;
+
+  function stopEmojiRain() {
+    clearInterval(rainSpawnTimer);
+    clearTimeout(rainStopTimer);
+    rainSpawnTimer = rainStopTimer = null;
+    document.removeEventListener("click", stopEmojiRain, true);
+    if (rainOverlay) {
+      rainOverlay.remove();
+      rainOverlay = null;
+    }
+  }
+
+  function spawnRainDrop() {
+    if (!rainOverlay) return;
+    const drop = el("span", "drop", RAIN_EMOJIS[(Math.random() * RAIN_EMOJIS.length) | 0]);
+    const drift = (Math.random() * 160 - 80) | 0;
+    const spin = (200 + Math.random() * 520) * (Math.random() < 0.5 ? -1 : 1);
+    drop.style.left = Math.random() * 100 + "vw";
+    drop.style.fontSize = 18 + Math.random() * 34 + "px";
+    drop.style.animationDuration = 3.2 + Math.random() * 5.5 + "s";
+    drop.style.setProperty("--drift", drift + "px");
+    drop.style.setProperty("--spin", spin + "deg");
+    drop.addEventListener("animationend", () => drop.remove());
+    rainOverlay.appendChild(drop);
+  }
+
+  function startEmojiRain() {
+    if (rainOverlay) return;
+    rainOverlay = el("div");
+    rainOverlay.id = "emoji-rain";
+    document.body.appendChild(rainOverlay);
+    for (let i = 0; i < 28; i++) spawnRainDrop();
+    rainSpawnTimer = setInterval(() => {
+      const n = 2 + ((Math.random() * 3) | 0);
+      for (let i = 0; i < n; i++) spawnRainDrop();
+    }, 90);
+    rainStopTimer = setTimeout(stopEmojiRain, 16000);
+    document.addEventListener("click", stopEmojiRain, true);
+  }
+
+  title.addEventListener("mouseenter", () => {
+    clearTimeout(rainArmTimer);
+    rainArmTimer = setTimeout(startEmojiRain, 30000);
+  });
+  title.addEventListener("mouseleave", () => {
+    clearTimeout(rainArmTimer);
+    rainArmTimer = null;
+  });
+  document.getElementById("cycle-bg").addEventListener("click", () => {
+    settings.motive =
+      MOTIVE_ORDER[(MOTIVE_ORDER.indexOf(settings.motive) + 1) % MOTIVE_ORDER.length];
+    applySettings();
+  });
+  document.querySelectorAll('input[name="dither"]').forEach((r) => {
+    r.addEventListener("change", () => {
+      settings.dither = r.value;
+      applySettings();
+    });
+  });
+  flipBox.addEventListener("change", () => {
+    settings.flip = flipBox.checked;
+    applySettings();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !panel.hidden) toggleSettings(false);
+  });
+  applySettings();
+</script>
