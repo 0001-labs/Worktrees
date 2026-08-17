@@ -257,11 +257,13 @@ async function worktreeDetails(wt, isMain, baseBranch) {
   wt.lastTouched = wt.dirty > 0 ? await lastTouched(wt.path, status) : null;
   if (!isMain) {
     // A linked worktree's ".git" pointer file is written when the worktree is
-    // created — its birthtime is the worktree's creation timestamp.
-    wt.created = await fs.promises
-      .stat(path.join(wt.path, ".git"))
-      .then((s) => formatTimestamp(s.birthtimeMs || s.mtimeMs))
-      .catch(() => null);
+    // created — its birthtime is the worktree's creation timestamp. The raw
+    // ms travels along so the client can scrub the date without re-fetching.
+    const st = await fs.promises.stat(path.join(wt.path, ".git")).catch(() => null);
+    if (st) {
+      wt.createdMs = st.birthtimeMs || st.mtimeMs;
+      wt.created = formatTimestamp(wt.createdMs);
+    }
   }
   return wt;
 }
@@ -444,6 +446,40 @@ const server = http.createServer(async (req, res) => {
     json(res, 200, { projects: next });
     return;
   }
+  // Scrub a worktree's creation date. The dashboard reads that date from the
+  // birthtime of the worktree's ".git" pointer file, so that is what gets
+  // rewritten here. Clamped to now — a worktree can never be from the future.
+  if (url.pathname === "/api/worktree/created" && req.method === "POST") {
+    const wtPath = url.searchParams.get("path");
+    const ms = Number(url.searchParams.get("ms"));
+    if (!wtPath || !Number.isFinite(ms)) {
+      json(res, 400, { error: "Missing path or ms" });
+      return;
+    }
+    const gitFile = path.join(wtPath, ".git");
+    // Only linked worktrees have a ".git" pointer *file*; refusing anything
+    // else keeps this from touching a main checkout or an arbitrary path.
+    const pointer = await fs.promises.readFile(gitFile, "utf8").catch(() => null);
+    if (!pointer || !pointer.startsWith("gitdir:")) {
+      json(res, 404, { error: "Not a linked worktree" });
+      return;
+    }
+    const target = new Date(Math.min(ms, Date.now()));
+    const pad = (n) => String(n).padStart(2, "0");
+    const stamp =
+      pad(target.getMonth() + 1) + "/" + pad(target.getDate()) + "/" + target.getFullYear() +
+      " " + pad(target.getHours()) + ":" + pad(target.getMinutes()) + ":" + pad(target.getSeconds());
+    // SetFile (Xcode CLTs) moves birthtime in either direction; if it is
+    // missing, utimes alone still covers backdating — APFS pulls birthtime
+    // down whenever the new mtime lands below it.
+    await new Promise((resolve) => execFile("SetFile", ["-d", stamp, gitFile], () => resolve()));
+    await fs.promises.utimes(gitFile, target, target).catch(() => {});
+    const st = await fs.promises.stat(gitFile).catch(() => null);
+    const createdMs = st ? st.birthtimeMs || st.mtimeMs : target.getTime();
+    json(res, 200, { createdMs, created: formatTimestamp(createdMs) });
+    return;
+  }
+
   // Local-only helper: accepts a PNG data URL and stores it as the board
   // background (used to pull rendered artwork out of design tools).
   if (url.pathname === "/api/background" && req.method === "POST") {

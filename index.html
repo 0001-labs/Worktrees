@@ -184,6 +184,16 @@
     font-weight: 400;
     opacity: 0.5;
   }
+  /* Scrubbable created-stamp: the value itself is the feedback (no tooltip),
+     so it only needs a resize cursor and protection from text selection and
+     touch scrolling while dragging. */
+  .worktree .branch .stamp.scrub {
+    cursor: ew-resize;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  .worktree .branch .stamp.scrub:active { opacity: 0.8; }
   /* Tight to the first branch — same 4px as h2 → count. Padding, not
      margin, so CSS columns cannot discard it at a fragment break. */
   .project .count { font-size: 13px; opacity: 0.55; padding-bottom: 22px; }
@@ -411,6 +421,7 @@
   let stopDetailPaging = null;
   let pendingRemove = null;
   let picking = false;
+  let scrubbing = false;
 
   function el(tag, cls, text) {
     const node = document.createElement(tag);
@@ -422,6 +433,97 @@
   // --c is the raw pastel; CSS darkens it when html.light-bg is on.
   function tint(node, hex) {
     node.style.setProperty("--c", hex);
+  }
+
+  // Mirrors the server's formatTimestamp so scrubbed values render identically.
+  function formatStamp(ms) {
+    const d = new Date(ms);
+    return (
+      String(d.getDate()).padStart(2, "0") +
+      " " +
+      d.toLocaleString("en", { month: "short" }) +
+      ", " +
+      String(d.getHours()).padStart(2, "0") +
+      ":" +
+      String(d.getMinutes()).padStart(2, "0")
+    );
+  }
+
+  // Drag the created-stamp horizontally to scrub the worktree's creation
+  // date. The drag stays purely local — at most one textContent write per
+  // animation frame, no tooltip, no network — and the date is persisted once,
+  // on release. Clamped so it can never pass now.
+  const SCRUB_MS_PER_PX = 5 * 60 * 1000;
+  function attachScrub(stamp, wt) {
+    stamp.classList.add("scrub");
+    let startX = 0;
+    let base = 0;
+    let value = 0;
+    let moved = false;
+    let frame = 0;
+
+    stamp.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      stamp.setPointerCapture(e.pointerId);
+      startX = e.clientX;
+      base = wt.createdMs;
+      value = base;
+      moved = false;
+      scrubbing = true;
+    });
+
+    stamp.addEventListener("pointermove", (e) => {
+      if (!stamp.hasPointerCapture(e.pointerId)) return;
+      const next = Math.min(base + (e.clientX - startX) * SCRUB_MS_PER_PX, Date.now());
+      if (next === value) return;
+      value = next;
+      moved = true;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const text = formatStamp(value);
+        if (stamp.textContent !== text) stamp.textContent = text;
+      });
+    });
+
+    stamp.addEventListener("pointerup", async (e) => {
+      if (!stamp.hasPointerCapture(e.pointerId)) return;
+      stamp.releasePointerCapture(e.pointerId);
+      scrubbing = false;
+      if (frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
+      if (!moved) return;
+      stamp.textContent = formatStamp(value);
+      try {
+        const res = await fetch(
+          "/api/worktree/created?path=" +
+            encodeURIComponent(wt.path) +
+            "&ms=" +
+            Math.round(value),
+          { method: "POST" }
+        );
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        // Written back into `latest` so re-renders before the next poll keep it.
+        wt.createdMs = data.createdMs;
+        wt.created = data.created;
+        stamp.textContent = data.created;
+      } catch {
+        stamp.textContent = formatStamp(wt.createdMs);
+      }
+    });
+
+    stamp.addEventListener("pointercancel", () => {
+      scrubbing = false;
+      if (frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
+      stamp.textContent = formatStamp(wt.createdMs);
+    });
   }
 
   function uniqueWorktrees(project) {
@@ -576,7 +678,11 @@
             )
           );
         // Right-aligned so it sits in the same lane as the commit timestamps.
-        if (wt.created) branch.appendChild(el("span", "stamp", wt.created));
+        if (wt.created) {
+          const stamp = el("span", "stamp", wt.created);
+          if (wt.createdMs) attachScrub(stamp, wt);
+          branch.appendChild(stamp);
+        }
         div.appendChild(branch);
 
         const commits = wt.commits;
@@ -620,6 +726,8 @@
   }
 
   async function load() {
+    // A poll mid-drag would tear down the stamp being scrubbed.
+    if (scrubbing) return;
     try {
       const res = await fetch("/api/data");
       if (!res.ok) throw new Error(String(res.status));
