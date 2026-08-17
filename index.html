@@ -63,8 +63,7 @@
      each --c toward near-black so inherited text (and opacity stamps/counts)
      still reads on cream. Header title #545454 is left alone. */
   html.light-bg .project,
-  html.light-bg .plist li,
-  html.light-bg #detail {
+  html.light-bg .plist li {
     color: color-mix(in srgb, var(--c, currentColor) 52%, #1a1410);
   }
   html.light-bg .project .count,
@@ -75,8 +74,10 @@
   html.light-bg .main-tag {
     opacity: 0.7;
   }
-  html.light-bg .worktree li { opacity: 0.88; }
-  html.light-bg .worktree .empty { opacity: 0.6; }
+  html.light-bg .worktree li,
+  html.light-bg .log li { opacity: 0.88; }
+  html.light-bg .worktree .empty,
+  html.light-bg .log-body .empty { opacity: 0.6; }
   body {
     font-family: "GT America", "GT America Standard", "Helvetica Neue", Helvetica, Arial, sans-serif;
     color: #fff;
@@ -122,49 +123,14 @@
     margin-bottom: 4px;
     cursor: pointer;
     display: inline-block;
+    text-decoration: none;
   }
-  .project h2:hover { text-decoration: underline; }
   /* Solo: other projects stay in the column flow so the focused one does not
-     jump; they are only invisible. */
-  .project.off { visibility: hidden; pointer-events: none; }
-  #detail { max-width: 900px; color: var(--c); }
-  #detail .back {
-    background: none;
-    border: none;
-    color: #999;
-    font: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    padding: 0;
-    margin-bottom: 24px;
-  }
-  #detail .back:hover { color: #fff; }
-  #detail h2 { font-size: 18px; font-weight: 500; }
-  #detail .sub { font-size: 13px; opacity: 0.55; margin: 4px 0 24px; }
-  #detail ul { list-style: none; }
-  #detail li {
-    font-size: 13px;
-    line-height: 1.7;
-    opacity: 0.8;
-    display: flex;
-    gap: 12px;
-  }
-  #detail li .hash {
-    opacity: 0.55;
-    flex-shrink: 0;
-    font-family: "SF Mono", Menlo, monospace;
-    font-size: 12px;
-    line-height: inherit;
-  }
-  #detail li .subject {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    -webkit-mask-image: linear-gradient(to right, #000 80%, transparent);
-    mask-image: linear-gradient(to right, #000 80%, transparent);
-  }
-  #detail li .author { opacity: 0.5; flex-shrink: 0; padding-left: 12px; }
+     jump; they are only invisible. Side of the focused column pages
+     prev/next (project or worktree) — cursor is a left/right pointer. */
+  .project.off { visibility: hidden; }
+  html.side-west, html.side-west * { cursor: w-resize; }
+  html.side-east, html.side-east * { cursor: e-resize; }
   .stamp {
     font-size: 13px;
     font-weight: 400;
@@ -187,6 +153,11 @@
   /* Tight to the first branch — same 4px as h2 → count. Padding, not
      margin, so CSS columns cannot discard it at a fragment break. */
   .project .count { font-size: 13px; opacity: 0.55; padding-bottom: 22px; }
+  .project .count.cycle {
+    cursor: pointer;
+    width: max-content;
+    text-decoration: none;
+  }
   .project .error { font-size: 13px; opacity: 0.5; font-style: italic; }
   .worktree { margin-bottom: 22px; }
   /* Same size, line-height and timestamp treatment as the commit rows so the
@@ -201,8 +172,8 @@
     min-width: 0;
   }
   .worktree .branch .bname {
-    flex: 1;
-    min-width: 0;
+    flex: 1 1 6em;
+    min-width: 5em;
     overflow: hidden;
     white-space: nowrap;
     color: inherit;
@@ -210,37 +181,47 @@
     -webkit-mask-image: linear-gradient(to right, #000 80%, transparent);
     mask-image: linear-gradient(to right, #000 80%, transparent);
   }
-  a.bname:hover { text-decoration: underline; }
   a.bname.draft { text-decoration: underline dashed; }
-  a.bname.draft:hover { text-decoration: underline dashed; }
-  .worktree .branch .dirty { flex-shrink: 0; }
+  /* Dirty copy is long ("2 changed files · last touched …"). If it cannot
+     shrink, a 340px column leaves the name with zero width. */
   .worktree .branch .dirty {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
     font-size: 12px;
     font-weight: 400;
     opacity: 0.7;
+    -webkit-mask-image: linear-gradient(to right, #000 80%, transparent);
+    mask-image: linear-gradient(to right, #000 80%, transparent);
   }
-  .worktree .empty {
+  .worktree .empty,
+  .log-body .empty {
     font-size: 13px;
     line-height: 1.45;
     opacity: 0.45;
     font-style: italic;
     margin-top: 4px;
   }
-  .worktree ul { list-style: none; margin-top: 4px; }
-  .worktree li {
+  .worktree ul,
+  .log { list-style: none; margin-top: 4px; }
+  .worktree li,
+  .log li {
     font-size: 13px;
     line-height: 1.45;
     opacity: 0.75;
     display: flex;
     gap: 10px;
   }
-  .worktree li .hash {
+  .worktree li .hash,
+  .log li .hash {
     opacity: 0.55;
     flex-shrink: 0;
     font-family: "SF Mono", Menlo, monospace;
     font-size: inherit;
   }
-  .worktree li .subject {
+  .worktree li .subject,
+  .log li .subject {
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -282,11 +263,10 @@
   .sgroup label:has(input:checked):hover { color: #ddd; }
   html.light-bg .sgroup label:has(input:checked) { color: #111; }
   html.light-bg .sgroup label:has(input:checked):hover { color: #000; }
-  html.light-bg #detail .back:hover { color: #111; }
   /* After the more specific stamp/hash opacity rules so they still lift on cream. */
   html.light-bg .worktree .branch .stamp,
   html.light-bg .worktree li .hash,
-  html.light-bg #detail li .hash {
+  html.light-bg .log li .hash {
     opacity: 0.7;
   }
   .sgroup label input {
@@ -399,18 +379,21 @@
   </section>
 </div>
 <div id="board"></div>
-<div id="detail" hidden></div>
 
 <script>
   const board = document.getElementById("board");
   const updated = document.getElementById("updated");
   const title = document.querySelector("header h1");
   let latest = null;
-  let activeProject = null;
   let soloProject = null;
-  let stopDetailPaging = null;
+  let soloWorktree = null;
+  let logProject = null;
+  let logBody = null;
+  let logGen = 0;
+  let stopLogPaging = null;
   let pendingRemove = null;
   let picking = false;
+  const PAGE = 100;
 
   function el(tag, cls, text) {
     const node = document.createElement(tag);
@@ -426,6 +409,86 @@
 
   function uniqueWorktrees(project) {
     return (project.worktrees || []).filter((wt) => wt.unique);
+  }
+
+  function onBoard(project) {
+    return !project.error && (project.worktrees || []).length > 0;
+  }
+
+  function worktreeLabel(wt) {
+    return wt.branch || (wt.detached ? "detached " + wt.head : wt.head);
+  }
+
+  function mainWorktree(project) {
+    const main = (project.worktrees || [])[0];
+    if (!main) return null;
+    const rev = main.branch || main.headFull || main.head;
+    if (!rev) return null;
+    return { label: worktreeLabel(main), rev, wt: main };
+  }
+
+  function countLabel(n, word) {
+    return n + (n === 1 ? " " + word : " " + word + "s");
+  }
+
+  function visibleProjects(projects) {
+    return sortedProjects(projects).filter(onBoard);
+  }
+
+  function neighborSolo(dir) {
+    if (!latest || !soloProject) return null;
+    const list = visibleProjects(latest.projects);
+    const i = list.findIndex((p) => p.name === soloProject);
+    const next = list[i + dir];
+    return next ? next.name : null;
+  }
+
+  function neighborWorktree(dir) {
+    if (!latest || !soloProject || !soloWorktree) return null;
+    const project = latest.projects.find((p) => p.name === soloProject);
+    if (!project) return null;
+    const list = uniqueWorktrees(project);
+    const i = list.findIndex((wt) => worktreeLabel(wt) === soloWorktree);
+    const next = list[i + dir];
+    return next ? worktreeLabel(next) : null;
+  }
+
+  function sideAction(dir) {
+    if (!logProject && dir === 1) {
+      const wt = neighborWorktree(1);
+      if (wt) return { type: "worktree", value: wt };
+    }
+    const name = neighborSolo(dir);
+    return name ? { type: "project", value: name } : null;
+  }
+
+  function runSide(dir) {
+    const act = sideAction(dir);
+    if (!act) return;
+    if (act.type === "worktree") {
+      soloWorktree = act.value;
+      render(latest);
+    } else switchSolo(act.value);
+  }
+
+  function switchSolo(name) {
+    const keepLog = !!logProject;
+    stopLog();
+    soloWorktree = null;
+    soloProject = name;
+    logProject = keepLog ? name : null;
+    render(latest);
+  }
+
+  function sideDir(e) {
+    if (!soloProject || !latest || board.hidden) return 0;
+    if (e.target.closest("header") || e.target.closest("#settings-page")) return 0;
+    const focused = board.querySelector(".project:not(.off)");
+    if (!focused || focused.contains(e.target)) return 0;
+    const r = focused.getBoundingClientRect();
+    if (e.clientX < r.left) return -1;
+    if (e.clientX > r.right) return 1;
+    return 0;
   }
 
   function sortedProjects(projects) {
@@ -459,8 +522,14 @@
             method: "DELETE",
           });
           pendingRemove = null;
-          if (soloProject === project.name) soloProject = null;
-          if (activeProject && activeProject.name === project.name) closeDetail();
+          if (soloProject === project.name) {
+            soloProject = null;
+            soloWorktree = null;
+          }
+          if (logProject === project.name) {
+            stopLog();
+            logProject = null;
+          }
           await load();
         });
         no.addEventListener("click", (e) => {
@@ -476,8 +545,8 @@
             "span",
             "pcount",
             n === 0
-              ? "hidden — no worktrees"
-              : n + (n === 1 ? " worktree" : " worktrees")
+              ? "0 worktrees"
+              : countLabel(n, "worktree")
           )
         );
         li.addEventListener("click", () => {
@@ -500,34 +569,84 @@
     return d;
   }
 
+  function branchRow(wt, label) {
+    const row = el("div", "branch");
+    const name = wt && wt.pr ? el("a", "bname", label) : el("span", "bname", label);
+    if (wt) name.title = wt.path;
+    if (wt && wt.pr) {
+      name.href = wt.pr.url;
+      name.target = "_blank";
+      name.rel = "noopener";
+      if (wt.pr.state === "open" && wt.pr.draft) name.classList.add("draft");
+    }
+    row.appendChild(name);
+    if (!wt) return row;
+    const commits = wt.commits || [];
+    const totals = commits.reduce(
+      (a, c) => ({ p: a.p + (c.plus || 0), m: a.m + (c.minus || 0) }),
+      { p: 0, m: 0 }
+    );
+    if (totals.p > 0 || totals.m > 0)
+      row.appendChild(diffEl({ plus: totals.p, minus: totals.m }));
+    if (wt.dirty > 0)
+      row.appendChild(
+        el(
+          "span",
+          "dirty",
+          wt.dirty +
+            (wt.dirty === 1 ? " changed file" : " changed files") +
+            (wt.lastTouched ? " · last touched " + wt.lastTouched : "")
+        )
+      );
+    const stamp = wt.created || (commits[0] && commits[0].date);
+    if (stamp) row.appendChild(el("span", "stamp", stamp));
+    return row;
+  }
+
   function render(data) {
     latest = data;
     renderSettingsProjects();
     if (
       soloProject &&
-      !data.projects.some(
-        (p) => p.name === soloProject && uniqueWorktrees(p).length > 0
-      )
-    )
+      !data.projects.some((p) => p.name === soloProject && onBoard(p))
+    ) {
       soloProject = null;
+      soloWorktree = null;
+    }
+    if (
+      logProject &&
+      !data.projects.some((p) => p.name === logProject && onBoard(p))
+    ) {
+      stopLog();
+      logProject = null;
+    }
+    const reuseLog = logProject && logBody;
     board.textContent = "";
     for (const project of sortedProjects(data.projects)) {
-      // Hide projects with nothing to show (no unique worktrees, or a
-      // missing git repo). They stay listed in settings.
+      if (!onBoard(project)) continue;
       const shown = uniqueWorktrees(project);
-      if (shown.length === 0) continue;
 
       const section = el("section", "project");
       tint(section, project.color);
-      if (soloProject && project.name !== soloProject) section.classList.add("off");
+      const hidden = soloProject && project.name !== soloProject;
+      if (hidden) section.classList.add("off");
       const h2 = el("h2", null, project.name);
-      if (!project.error) {
+      if (!project.error && !hidden) {
         h2.addEventListener("click", () => {
-          if (soloProject === project.name) {
-            openDetail(project);
-            return;
+          if (logProject === project.name) {
+            stopLog();
+            logProject = null;
+            soloProject = null;
+            soloWorktree = null;
+          } else if (soloProject === project.name) {
+            soloWorktree = null;
+            logProject = project.name;
+          } else {
+            stopLog();
+            logProject = null;
+            soloProject = project.name;
+            soloWorktree = null;
           }
-          soloProject = project.name;
           render(latest);
         });
       }
@@ -543,41 +662,50 @@
       // git counts the main checkout as a worktree; it isn't one in the sense
       // that matters here, so it's labelled and excluded from the count.
       const n = shown.length;
-      section.appendChild(el("div", "count", n + (n === 1 ? " worktree" : " worktrees")));
+      const count = el("div", "count", countLabel(n, "worktree"));
+      const inSolo =
+        soloProject === project.name && logProject !== project.name;
+      if (inSolo && n > 1) {
+        count.classList.add("cycle");
+        count.title = "Next worktree";
+        count.addEventListener("click", () => {
+          const i = soloWorktree
+            ? shown.findIndex((wt) => worktreeLabel(wt) === soloWorktree)
+            : -1;
+          soloWorktree = worktreeLabel(shown[(i + 1) % n]);
+          render(latest);
+        });
+      }
+      section.appendChild(count);
 
-      shown.forEach((wt) => {
-        const div = el("div", "worktree");
-        const branch = el("div", "branch");
-        const label = wt.branch || (wt.detached ? "detached " + wt.head : wt.head);
-        const name = wt.pr ? el("a", "bname", label) : el("span", "bname", label);
-        name.title = wt.path;
-        if (wt.pr) {
-          name.href = wt.pr.url;
-          name.target = "_blank";
-          name.rel = "noopener";
-          if (wt.pr.state === "open" && wt.pr.draft) name.classList.add("draft");
-        }
-        branch.appendChild(name);
-        // Collective diff of the worktree's own commits, in the header row.
-        const totals = wt.commits.reduce(
-          (a, c) => ({ p: a.p + (c.plus || 0), m: a.m + (c.minus || 0) }),
-          { p: 0, m: 0 }
-        );
-        if (totals.p > 0 || totals.m > 0)
-          branch.appendChild(diffEl({ plus: totals.p, minus: totals.m }));
-        if (wt.dirty > 0)
-          branch.appendChild(
-            el(
-              "span",
-              "dirty",
-              wt.dirty +
-                (wt.dirty === 1 ? " changed file" : " changed files") +
-                (wt.lastTouched ? " · last touched " + wt.lastTouched : "")
-            )
+      if (logProject === project.name) {
+        if (reuseLog) {
+          section.appendChild(logBody);
+        } else {
+          const main = mainWorktree(project);
+          logBody = el("div", "log-body worktree");
+          const ul = el("ul", "log");
+          logBody.append(
+            branchRow(main && main.wt, main ? main.label : "HEAD"),
+            ul
           );
-        // Right-aligned so it sits in the same lane as the commit timestamps.
-        if (wt.created) branch.appendChild(el("span", "stamp", wt.created));
-        div.appendChild(branch);
+          section.appendChild(logBody);
+          startLog(project, logBody, ul, main ? main.rev : null);
+        }
+        board.appendChild(section);
+        continue;
+      }
+
+      let cards = shown;
+      if (inSolo && soloWorktree) {
+        const one = shown.find((wt) => worktreeLabel(wt) === soloWorktree);
+        if (one) cards = [one];
+        else soloWorktree = null;
+      }
+
+      cards.forEach((wt) => {
+        const div = el("div", "worktree");
+        div.appendChild(branchRow(wt, worktreeLabel(wt)));
 
         const commits = wt.commits;
 
@@ -617,6 +745,8 @@
     title.textContent = "Worktrees";
     title.classList.remove("fail");
     title.style.color = "";
+    if (logProject && logBody && logBody.isConnected)
+      window.dispatchEvent(new Event("scroll"));
   }
 
   async function load() {
@@ -632,47 +762,28 @@
     }
   }
 
-  const detail = document.getElementById("detail");
-  const PAGE = 100;
-
-  function closeDetail() {
-    if (stopDetailPaging) {
-      stopDetailPaging();
-      stopDetailPaging = null;
+  function stopLog() {
+    logGen++;
+    if (stopLogPaging) {
+      stopLogPaging();
+      stopLogPaging = null;
     }
-    detail.hidden = true;
-    detail.textContent = "";
-    activeProject = null;
-    board.hidden = false;
+    logBody = null;
   }
 
-  async function openDetail(project) {
-    if (stopDetailPaging) {
-      stopDetailPaging();
-      stopDetailPaging = null;
+  function startLog(project, body, ul, rev) {
+    const gen = ++logGen;
+    if (stopLogPaging) {
+      stopLogPaging();
+      stopLogPaging = null;
     }
-    activeProject = project;
-    board.hidden = true;
-    detail.hidden = false;
-    detail.textContent = "";
-    tint(detail, project.color);
-
-    const back = el("button", "back", "← All projects");
-    back.addEventListener("click", closeDetail);
-    detail.appendChild(back);
-    detail.appendChild(el("h2", null, project.name));
-    const sub = el("div", "sub", "Loading…");
-    detail.appendChild(sub);
-    const ul = el("ul");
-    detail.appendChild(ul);
 
     let skip = 0;
-    let count = 0;
     let hasMore = true;
     let fetching = false;
 
     async function loadPage() {
-      if (fetching || !hasMore) return;
+      if (fetching || !hasMore || gen !== logGen) return;
       fetching = true;
       try {
         const res = await fetch(
@@ -681,12 +792,14 @@
             "&skip=" +
             skip +
             "&limit=" +
-            PAGE
+            PAGE +
+            (rev ? "&branch=" + encodeURIComponent(rev) : "")
         );
         const data = await res.json();
-        if (activeProject !== project) return;
+        if (gen !== logGen) return;
         if (data.error) {
-          sub.textContent = data.error;
+          ul.remove();
+          body.appendChild(el("div", "error", data.error));
           hasMore = false;
           return;
         }
@@ -695,43 +808,34 @@
           li.appendChild(el("span", "hash", c.hash));
           li.appendChild(el("span", "subject", c.subject));
           li.appendChild(diffEl(c));
-          li.appendChild(el("span", "author", c.author));
           li.appendChild(el("span", "stamp", c.date));
           li.title = c.subject + " — " + c.author + ", " + c.date;
           ul.appendChild(li);
         }
         skip += PAGE;
-        count += data.commits.length;
         hasMore = !!data.hasMore;
-        sub.textContent =
-          (data.grep ? data.grep + " · " + data.branch : data.branch) +
-          " · " +
-          count +
-          " commits" +
-          (hasMore ? "+" : "");
-        if (count === 0) sub.textContent = (data.grep || data.branch) + " · no commits found";
+        if (skip === PAGE && data.commits.length === 0) {
+          ul.remove();
+          body.appendChild(el("div", "empty", "No commits found"));
+        }
       } finally {
         fetching = false;
       }
-      if (activeProject === project) maybeLoadMore();
+      if (gen === logGen) maybeLoadMore();
     }
 
     function maybeLoadMore() {
-      if (fetching || !hasMore || detail.hidden) return;
+      if (fetching || !hasMore || gen !== logGen || board.hidden || !ul.isConnected)
+        return;
       const threshold = 240;
-      const near =
-        detail.scrollHeight > detail.clientHeight + 1
-          ? detail.scrollTop + detail.clientHeight >= detail.scrollHeight - threshold
-          : detail.getBoundingClientRect().bottom - window.innerHeight <= threshold;
-      if (near) loadPage();
+      if (ul.getBoundingClientRect().bottom - window.innerHeight <= threshold)
+        loadPage();
     }
 
     window.addEventListener("scroll", maybeLoadMore, { passive: true });
-    detail.addEventListener("scroll", maybeLoadMore, { passive: true });
-    stopDetailPaging = () => {
+    stopLogPaging = () => {
       hasMore = false;
       window.removeEventListener("scroll", maybeLoadMore);
-      detail.removeEventListener("scroll", maybeLoadMore);
     };
 
     loadPage();
@@ -740,11 +844,29 @@
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!panel.hidden) toggleSettings(false);
-    else if (!detail.hidden) closeDetail();
-    else if (soloProject) {
+    else if (logProject) {
+      stopLog();
+      logProject = null;
+      if (latest) render(latest);
+    } else if (soloWorktree) {
+      soloWorktree = null;
+      if (latest) render(latest);
+    } else if (soloProject) {
       soloProject = null;
       if (latest) render(latest);
     }
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    const dir = sideDir(e);
+    const act = dir ? sideAction(dir) : null;
+    document.documentElement.classList.toggle("side-west", !!(act && dir < 0));
+    document.documentElement.classList.toggle("side-east", !!(act && dir > 0));
+  });
+
+  document.addEventListener("click", (e) => {
+    const dir = sideDir(e);
+    if (dir) runSide(dir);
   });
 
   // Settings: picture motive, dither effect, and flip — persisted per browser.
@@ -791,8 +913,8 @@
     const on = open != null ? open : panel.hidden;
     panel.hidden = !on;
     board.hidden = on;
-    if (on && !detail.hidden) closeDetail(), (board.hidden = true);
     title.classList.toggle("pressed", on);
+    if (!on && logProject) window.dispatchEvent(new Event("scroll"));
   }
   title.addEventListener("click", () => toggleSettings());
 

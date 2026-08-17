@@ -350,6 +350,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const grep = url.searchParams.get("grep");
+    const requested = (url.searchParams.get("branch") || "").trim();
+    if (requested.startsWith("-") || /\s/.test(requested)) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid branch" }));
+      return;
+    }
     try {
       const logArgs = ["log", "-n", String(limit), "--skip", String(skip)];
       // --grep searches the whole message, so a deliverable ID like "Mf42tC-1"
@@ -358,15 +364,18 @@ const server = http.createServer(async (req, res) => {
       // refs/original backups and show every commit twice.
       if (grep)
         logArgs.push("--grep", grep, "--regexp-ignore-case", "--branches", "--remotes", "--tags");
-      const [branch, log] = await Promise.all([
-        git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]),
-        git(project.path, [...logArgs, ...LOG_FORMAT]),
-      ]);
+      const head = (await git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
+      const branch = requested || head;
+      if (!grep) {
+        if (branch !== head) logArgs.push(head + ".." + branch);
+        else logArgs.push(branch);
+      }
+      const log = await git(project.path, [...logArgs, ...LOG_FORMAT]);
       const commits = parseCommits(log);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          branch: grep ? "all branches" : branch.trim(),
+          branch: grep ? "all branches" : branch,
           grep: grep || null,
           commits,
           hasMore: commits.length === limit,
