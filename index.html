@@ -449,52 +449,69 @@
     );
   }
 
-  // Drag the created-stamp horizontally to scrub the worktree's creation
-  // date. The drag stays purely local — at most one textContent write per
-  // animation frame, no tooltip, no network — and the date is persisted once,
-  // on release. Clamped so it can never pass now.
+  // Drag the created-stamp to scrub the worktree's creation date. Pointer
+  // lock pins the cursor at the grab point for the whole drag (Consistency
+  // style) while raw movement deltas keep arriving, so the cursor never
+  // wanders off the stamp or hits a screen edge. The drag stays purely
+  // local — at most one textContent write per animation frame, no tooltip,
+  // no network — and the date is persisted once, on release. Applying the
+  // "never in the future" clamp to the running value (not to a start-offset
+  // total) means overshooting past now leaves no dead zone on the way back.
   const SCRUB_MS_PER_PX = 5 * 60 * 1000;
   function attachScrub(stamp, wt) {
     stamp.classList.add("scrub");
-    let startX = 0;
-    let base = 0;
+    let lastX = 0;
     let value = 0;
     let moved = false;
     let frame = 0;
+    let active = false;
+
+    const paint = () => {
+      frame = 0;
+      const text = formatStamp(value);
+      if (stamp.textContent !== text) stamp.textContent = text;
+    };
+
+    const stop = () => {
+      active = false;
+      scrubbing = false;
+      if (document.pointerLockElement === stamp) document.exitPointerLock();
+      if (frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
+    };
 
     stamp.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       e.preventDefault();
       stamp.setPointerCapture(e.pointerId);
-      startX = e.clientX;
-      base = wt.createdMs;
-      value = base;
+      // Degrades to a plain captured drag wherever pointer lock is refused.
+      try {
+        stamp.requestPointerLock();
+      } catch {}
+      lastX = e.clientX;
+      value = wt.createdMs;
       moved = false;
+      active = true;
       scrubbing = true;
     });
 
     stamp.addEventListener("pointermove", (e) => {
-      if (!stamp.hasPointerCapture(e.pointerId)) return;
-      const next = Math.min(base + (e.clientX - startX) * SCRUB_MS_PER_PX, Date.now());
-      if (next === value) return;
-      value = next;
+      if (!active) return;
+      const dx =
+        document.pointerLockElement === stamp ? e.movementX : e.clientX - lastX;
+      lastX = e.clientX;
+      if (!dx) return;
       moved = true;
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        const text = formatStamp(value);
-        if (stamp.textContent !== text) stamp.textContent = text;
-      });
+      value = Math.min(value + dx * SCRUB_MS_PER_PX, Date.now());
+      if (!frame) frame = requestAnimationFrame(paint);
     });
 
     stamp.addEventListener("pointerup", async (e) => {
-      if (!stamp.hasPointerCapture(e.pointerId)) return;
+      if (!active) return;
       stamp.releasePointerCapture(e.pointerId);
-      scrubbing = false;
-      if (frame) {
-        cancelAnimationFrame(frame);
-        frame = 0;
-      }
+      stop();
       if (!moved) return;
       stamp.textContent = formatStamp(value);
       try {
@@ -517,11 +534,8 @@
     });
 
     stamp.addEventListener("pointercancel", () => {
-      scrubbing = false;
-      if (frame) {
-        cancelAnimationFrame(frame);
-        frame = 0;
-      }
+      if (!active) return;
+      stop();
       stamp.textContent = formatStamp(wt.createdMs);
     });
   }
