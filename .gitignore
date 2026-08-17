@@ -1,0 +1,14 @@
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+*~
+*.log
+.env
+.env.*
+node_modules/
+
+# Neighboring project worktrees — not part of this dashboard
+Woodstock/
+Thailand Tours/

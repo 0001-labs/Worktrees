@@ -1,0 +1,886 @@
+<title>Worktrees</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { background: #000; }
+  html.light-bg { background: #e6e1d6; }
+  /* Transparent so the fixed #bg artwork layer shows through — an opaque body
+     background paints on top of negative z-index children. */
+  body { background: transparent; }
+  /* Artwork layer behind everything; the dark scrim keeps text readable on
+     dark motives (original flower / Night bloom / Black pine). Daylight drops
+     it so the pale field actually reads as light. Flip rotates the whole
+     image 180°. Dither classes add an effect on top of whichever motive is
+     selected — they do not change the photo. */
+  #bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: #000 center / cover no-repeat;
+    pointer-events: none;
+  }
+  html.light-bg #bg { background-color: #e6e1d6; }
+  #bg.flip { transform: rotate(180deg); }
+  #bg.dither-fine::before,
+  #bg.dither-poster::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  /* Fine dither: grain overlay matching the old dithered botanical look. */
+  #bg.dither-fine::before {
+    opacity: 0.4;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+  }
+  #bg.light.dither-fine::before {
+    mix-blend-mode: multiply;
+    opacity: 0.28;
+  }
+  /* Posterized: flatten tones with contrast/saturate; a coarser grain on top. */
+  #bg.dither-poster {
+    filter: contrast(1.65) saturate(0.4) brightness(1.03);
+  }
+  #bg.dither-poster::before {
+    opacity: 0.22;
+    mix-blend-mode: hard-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 80px 80px;
+  }
+  #bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+  }
+  #bg.light::after {
+    background: rgba(255, 250, 242, 0.22);
+  }
+  /* Pastel project hues were picked for the dark board. On Daylight, mix
+     each --c toward near-black so inherited text (and opacity stamps/counts)
+     still reads on cream. Header title #545454 is left alone. */
+  html.light-bg .project,
+  html.light-bg .plist li,
+  html.light-bg #detail {
+    color: color-mix(in srgb, var(--c, currentColor) 52%, #1a1410);
+  }
+  html.light-bg .project .count,
+  html.light-bg .project .error,
+  html.light-bg .stamp,
+  html.light-bg .hash,
+  html.light-bg .pcount,
+  html.light-bg .main-tag {
+    opacity: 0.7;
+  }
+  html.light-bg .worktree li { opacity: 0.88; }
+  html.light-bg .worktree .empty { opacity: 0.6; }
+  body {
+    font-family: "GT America", "GT America Standard", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #fff;
+    padding: 48px 40px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 40px;
+  }
+  header h1 {
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: #545454;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  /* While settings are open the title reads as pressed into the chrome. */
+  header h1.pressed { color: #111; }
+  header h1.fail { color: #e11d48; }
+  header .meta { font-size: 13px; color: #666; }
+  /* Masonry: projects flow into columns and fill whatever space there is.
+     The container is one column + gap narrower so the rightmost slot
+     stays empty — columns never occupy the last column of the page. */
+  #board {
+    columns: 340px;
+    column-gap: 48px;
+    width: calc(100% - 340px - 48px);
+  }
+  .project {
+    break-inside: avoid;
+    /* padding, not margin: a margin at a column break spills into the next
+       column and pushes its first project down. */
+    padding-bottom: 44px;
+    color: var(--c);
+  }
+  .project h2 {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    cursor: pointer;
+    display: inline-block;
+  }
+  .project h2:hover { text-decoration: underline; }
+  /* Solo: other projects stay in the column flow so the focused one does not
+     jump; they are only invisible. */
+  .project.off { visibility: hidden; pointer-events: none; }
+  #detail { max-width: 900px; color: var(--c); }
+  #detail .back {
+    background: none;
+    border: none;
+    color: #999;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0;
+    margin-bottom: 24px;
+  }
+  #detail .back:hover { color: #fff; }
+  #detail h2 { font-size: 18px; font-weight: 500; }
+  #detail .sub { font-size: 13px; opacity: 0.55; margin: 4px 0 24px; }
+  #detail ul { list-style: none; }
+  #detail li {
+    font-size: 13px;
+    line-height: 1.7;
+    opacity: 0.8;
+    display: flex;
+    gap: 12px;
+  }
+  #detail li .hash {
+    opacity: 0.55;
+    flex-shrink: 0;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    line-height: inherit;
+  }
+  #detail li .subject {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    -webkit-mask-image: linear-gradient(to right, #000 80%, transparent);
+    mask-image: linear-gradient(to right, #000 80%, transparent);
+  }
+  #detail li .author { opacity: 0.5; flex-shrink: 0; padding-left: 12px; }
+  .stamp {
+    font-size: 13px;
+    font-weight: 400;
+    opacity: 0.5;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding-left: 12px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    min-width: 7.6em;
+  }
+  /* Created dates sit on a full-opacity, weight-500 branch row. Same 0.5 as
+     the shared .stamp — a notch above the old extra fade (0.375) so the
+     headline stamp is more legible, still quieter than the branch name. */
+  .worktree .branch .stamp {
+    font-size: 13px;
+    font-weight: 400;
+    opacity: 0.5;
+  }
+  /* Tight to the first branch — same 4px as h2 → count. Padding, not
+     margin, so CSS columns cannot discard it at a fragment break. */
+  .project .count { font-size: 13px; opacity: 0.55; padding-bottom: 22px; }
+  .project .error { font-size: 13px; opacity: 0.5; font-style: italic; }
+  .worktree { margin-bottom: 22px; }
+  /* Same size, line-height and timestamp treatment as the commit rows so the
+     branch line sits in the identical rhythm; weight alone sets it apart. */
+  .worktree .branch {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.45;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+  .worktree .branch .bname {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    color: inherit;
+    text-decoration: none;
+    -webkit-mask-image: linear-gradient(to right, #000 80%, transparent);
+    mask-image: linear-gradient(to right, #000 80%, transparent);
+  }
+  a.bname:hover { text-decoration: underline; }
+  a.bname.draft { text-decoration: underline dashed; }
+  a.bname.draft:hover { text-decoration: underline dashed; }
+  .worktree .branch .dirty { flex-shrink: 0; }
+  .worktree .branch .dirty {
+    font-size: 12px;
+    font-weight: 400;
+    opacity: 0.7;
+  }
+  .worktree .empty {
+    font-size: 13px;
+    line-height: 1.45;
+    opacity: 0.45;
+    font-style: italic;
+    margin-top: 4px;
+  }
+  .worktree ul { list-style: none; margin-top: 4px; }
+  .worktree li {
+    font-size: 13px;
+    line-height: 1.45;
+    opacity: 0.75;
+    display: flex;
+    gap: 10px;
+  }
+  .worktree li .hash {
+    opacity: 0.55;
+    flex-shrink: 0;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: inherit;
+  }
+  .worktree li .subject {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    -webkit-mask-image: linear-gradient(to right, #000 80%, transparent);
+    mask-image: linear-gradient(to right, #000 80%, transparent);
+  }
+  li .diff,
+  .branch .diff { flex-shrink: 0; opacity: 0.6; padding-left: 12px; white-space: nowrap; }
+  li .diff { font-size: inherit; }
+  .branch .diff { font-size: 12px; font-weight: 400; padding-left: 4px; }
+  /* Deletions always sit in neutral grey — only additions carry the project
+     color. Zero counts are omitted entirely. */
+  li .diff .minus,
+  .branch .diff .minus { color: #555; }
+  .main-tag { font-size: 12px; font-weight: 400; opacity: 0.55; }
+  /* Settings as a full page, laid out with the same rhythm as the board. */
+  #settings-page {
+    display: grid;
+    gap: 40px;
+    align-content: start;
+  }
+  .sgroup h2 { font-size: 16px; font-weight: 500; margin-bottom: 14px; color: #111; }
+  #add-project, #cycle-bg { cursor: pointer; }
+  /* Background / orientation: same idea as the title — clickable text,
+     on vs off is only a color shift. Native inputs stay for change events
+     and localStorage, but are taken out of the visual tree. */
+  .sgroup label {
+    display: block;
+    position: relative;
+    font-size: 13px;
+    color: #545454;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: color 0.15s ease;
+  }
+  .sgroup label:hover { color: #6a6a6a; }
+  .sgroup label:has(input:checked) { color: #ccc; }
+  .sgroup label:has(input:checked):hover { color: #ddd; }
+  html.light-bg .sgroup label:has(input:checked) { color: #111; }
+  html.light-bg .sgroup label:has(input:checked):hover { color: #000; }
+  html.light-bg #detail .back:hover { color: #111; }
+  /* After the more specific stamp/hash opacity rules so they still lift on cream. */
+  html.light-bg .worktree .branch .stamp,
+  html.light-bg .worktree li .hash,
+  html.light-bg #detail li .hash {
+    opacity: 0.7;
+  }
+  .sgroup label input {
+    appearance: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  /* Same 340px as a board project column — name + status on one row,
+     not stretched across the settings page. */
+  .plist { list-style: none; width: 340px; }
+  .plist li {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    font-size: 13px;
+    padding: 4px 0;
+    cursor: pointer;
+    color: var(--c);
+  }
+  .plist li.empty { opacity: 0.4; }
+  .plist li.confirm { opacity: 1; cursor: default; }
+  .plist .pname {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    -webkit-mask-image: linear-gradient(to right, #000 80%, transparent);
+    mask-image: linear-gradient(to right, #000 80%, transparent);
+  }
+  .plist .pcount {
+    margin-left: auto;
+    opacity: 0.55;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .plist .pask {
+    margin-left: auto;
+    white-space: nowrap;
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+  .plist .pask button {
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0;
+    opacity: 0.75;
+  }
+  .plist .pask button:hover { opacity: 1; }
+  /* Easter egg: full-viewport emoji rain. pointer-events none so the title
+     still opens settings and the press state still works underneath. */
+  #emoji-rain {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  #emoji-rain .drop {
+    position: absolute;
+    top: 0;
+    line-height: 1;
+    will-change: transform;
+    animation: emoji-fall linear forwards;
+    user-select: none;
+  }
+  @keyframes emoji-fall {
+    0% {
+      transform: translate3d(0, -12vh, 0) rotate(0deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translate3d(var(--drift, 0px), 112vh, 0) rotate(var(--spin, 360deg));
+      opacity: 0.9;
+    }
+  }
+</style>
+
+<header>
+  <h1>Worktrees</h1>
+  <div class="meta">
+    <span id="updated"></span>
+  </div>
+</header>
+<div id="bg"></div>
+<div id="settings-page" hidden>
+  <section class="sgroup">
+    <h2 id="add-project">Projects</h2>
+    <ul id="settings-projects" class="plist"></ul>
+  </section>
+  <section class="sgroup">
+    <h2 id="cycle-bg">Background</h2>
+    <label><input type="radio" name="dither" value="fine" /> Fine dither</label>
+    <label><input type="radio" name="dither" value="poster" /> Posterized</label>
+    <label><input type="radio" name="dither" value="none" /> None</label>
+  </section>
+  <section class="sgroup">
+    <h2>Orientation</h2>
+    <label><input type="checkbox" id="bg-flip" /> Upside down</label>
+  </section>
+</div>
+<div id="board"></div>
+<div id="detail" hidden></div>
+
+<script>
+  const board = document.getElementById("board");
+  const updated = document.getElementById("updated");
+  const title = document.querySelector("header h1");
+  let latest = null;
+  let activeProject = null;
+  let soloProject = null;
+  let stopDetailPaging = null;
+  let pendingRemove = null;
+  let picking = false;
+
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  // --c is the raw pastel; CSS darkens it when html.light-bg is on.
+  function tint(node, hex) {
+    node.style.setProperty("--c", hex);
+  }
+
+  function uniqueWorktrees(project) {
+    return (project.worktrees || []).filter((wt) => wt.unique);
+  }
+
+  function sortedProjects(projects) {
+    return [...projects].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+    );
+  }
+
+  function renderSettingsProjects() {
+    const list = document.getElementById("settings-projects");
+    list.textContent = "";
+    if (!latest) {
+      list.appendChild(el("li", "empty", "Loading…"));
+      return;
+    }
+    for (const project of sortedProjects(latest.projects)) {
+      const n = uniqueWorktrees(project).length;
+      const confirming = pendingRemove === project.path;
+      const li = el("li", confirming ? "confirm" : n === 0 ? "empty" : null);
+      tint(li, project.color);
+      li.appendChild(
+        el("span", "pname", confirming ? "Remove project?" : project.name)
+      );
+      if (confirming) {
+        const ask = el("span", "pask");
+        const yes = el("button", null, "Yes");
+        const no = el("button", null, "No");
+        yes.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          await fetch("/api/projects?path=" + encodeURIComponent(project.path), {
+            method: "DELETE",
+          });
+          pendingRemove = null;
+          if (soloProject === project.name) soloProject = null;
+          if (activeProject && activeProject.name === project.name) closeDetail();
+          await load();
+        });
+        no.addEventListener("click", (e) => {
+          e.stopPropagation();
+          pendingRemove = null;
+          renderSettingsProjects();
+        });
+        ask.append(yes, " ", no);
+        li.appendChild(ask);
+      } else {
+        li.appendChild(
+          el(
+            "span",
+            "pcount",
+            n === 0
+              ? "hidden — no worktrees"
+              : n + (n === 1 ? " worktree" : " worktrees")
+          )
+        );
+        li.addEventListener("click", () => {
+          pendingRemove = project.path;
+          renderSettingsProjects();
+        });
+      }
+      list.appendChild(li);
+    }
+  }
+
+  function diffEl(c) {
+    const d = el("span", "diff");
+    if (c.plus == null) return d;
+    if (c.plus > 0) d.appendChild(el("span", null, "+" + c.plus));
+    if (c.minus > 0) {
+      if (c.plus > 0) d.append(" ");
+      d.appendChild(el("span", "minus", "−" + c.minus));
+    }
+    return d;
+  }
+
+  function render(data) {
+    latest = data;
+    renderSettingsProjects();
+    if (
+      soloProject &&
+      !data.projects.some(
+        (p) => p.name === soloProject && uniqueWorktrees(p).length > 0
+      )
+    )
+      soloProject = null;
+    board.textContent = "";
+    for (const project of sortedProjects(data.projects)) {
+      // Hide projects with nothing to show (no unique worktrees, or a
+      // missing git repo). They stay listed in settings.
+      const shown = uniqueWorktrees(project);
+      if (shown.length === 0) continue;
+
+      const section = el("section", "project");
+      tint(section, project.color);
+      if (soloProject && project.name !== soloProject) section.classList.add("off");
+      const h2 = el("h2", null, project.name);
+      if (!project.error) {
+        h2.addEventListener("click", () => {
+          if (soloProject === project.name) {
+            openDetail(project);
+            return;
+          }
+          soloProject = project.name;
+          render(latest);
+        });
+      }
+      section.appendChild(h2);
+
+      if (project.error) {
+        section.appendChild(el("div", "count", "0 worktrees"));
+        section.appendChild(el("div", "error", project.error));
+        board.appendChild(section);
+        continue;
+      }
+
+      // git counts the main checkout as a worktree; it isn't one in the sense
+      // that matters here, so it's labelled and excluded from the count.
+      const n = shown.length;
+      section.appendChild(el("div", "count", n + (n === 1 ? " worktree" : " worktrees")));
+
+      shown.forEach((wt) => {
+        const div = el("div", "worktree");
+        const branch = el("div", "branch");
+        const label = wt.branch || (wt.detached ? "detached " + wt.head : wt.head);
+        const name = wt.pr ? el("a", "bname", label) : el("span", "bname", label);
+        name.title = wt.path;
+        if (wt.pr) {
+          name.href = wt.pr.url;
+          name.target = "_blank";
+          name.rel = "noopener";
+          if (wt.pr.state === "open" && wt.pr.draft) name.classList.add("draft");
+        }
+        branch.appendChild(name);
+        // Collective diff of the worktree's own commits, in the header row.
+        const totals = wt.commits.reduce(
+          (a, c) => ({ p: a.p + (c.plus || 0), m: a.m + (c.minus || 0) }),
+          { p: 0, m: 0 }
+        );
+        if (totals.p > 0 || totals.m > 0)
+          branch.appendChild(diffEl({ plus: totals.p, minus: totals.m }));
+        if (wt.dirty > 0)
+          branch.appendChild(
+            el(
+              "span",
+              "dirty",
+              wt.dirty +
+                (wt.dirty === 1 ? " changed file" : " changed files") +
+                (wt.lastTouched ? " · last touched " + wt.lastTouched : "")
+            )
+          );
+        // Right-aligned so it sits in the same lane as the commit timestamps.
+        if (wt.created) branch.appendChild(el("span", "stamp", wt.created));
+        div.appendChild(branch);
+
+        const commits = wt.commits;
+
+        if (wt.unique && commits.length === 0) {
+          div.appendChild(
+            el(
+              "div",
+              "empty",
+              wt.deliverable
+                ? "No " + wt.deliverable + " commits yet"
+                : wt.dirty > 0
+                  ? "No commits on this branch yet"
+                  : "No work yet"
+            )
+          );
+        }
+
+        if (commits.length > 0) {
+          const ul = el("ul");
+          for (const c of commits) {
+            const li = el("li");
+            li.appendChild(el("span", "hash", c.hash));
+            li.appendChild(el("span", "subject", c.subject));
+            li.appendChild(diffEl(c));
+            li.appendChild(el("span", "stamp", c.date));
+            li.title = c.subject + " — " + c.author + ", " + c.date;
+            ul.appendChild(li);
+          }
+          div.appendChild(ul);
+        }
+        section.appendChild(div);
+      });
+      board.appendChild(section);
+    }
+    // Clean header: nothing shown while everything is healthy.
+    updated.textContent = "";
+    title.textContent = "Worktrees";
+    title.classList.remove("fail");
+    title.style.color = "";
+  }
+
+  async function load() {
+    try {
+      const res = await fetch("/api/data");
+      if (!res.ok) throw new Error(String(res.status));
+      render(await res.json());
+    } catch (err) {
+      updated.textContent = "";
+      title.textContent = "Failed to load";
+      title.classList.add("fail");
+      title.style.color = "#e11d48";
+    }
+  }
+
+  const detail = document.getElementById("detail");
+  const PAGE = 100;
+
+  function closeDetail() {
+    if (stopDetailPaging) {
+      stopDetailPaging();
+      stopDetailPaging = null;
+    }
+    detail.hidden = true;
+    detail.textContent = "";
+    activeProject = null;
+    board.hidden = false;
+  }
+
+  async function openDetail(project) {
+    if (stopDetailPaging) {
+      stopDetailPaging();
+      stopDetailPaging = null;
+    }
+    activeProject = project;
+    board.hidden = true;
+    detail.hidden = false;
+    detail.textContent = "";
+    tint(detail, project.color);
+
+    const back = el("button", "back", "← All projects");
+    back.addEventListener("click", closeDetail);
+    detail.appendChild(back);
+    detail.appendChild(el("h2", null, project.name));
+    const sub = el("div", "sub", "Loading…");
+    detail.appendChild(sub);
+    const ul = el("ul");
+    detail.appendChild(ul);
+
+    let skip = 0;
+    let count = 0;
+    let hasMore = true;
+    let fetching = false;
+
+    async function loadPage() {
+      if (fetching || !hasMore) return;
+      fetching = true;
+      try {
+        const res = await fetch(
+          "/api/log?project=" +
+            encodeURIComponent(project.name) +
+            "&skip=" +
+            skip +
+            "&limit=" +
+            PAGE
+        );
+        const data = await res.json();
+        if (activeProject !== project) return;
+        if (data.error) {
+          sub.textContent = data.error;
+          hasMore = false;
+          return;
+        }
+        for (const c of data.commits) {
+          const li = el("li");
+          li.appendChild(el("span", "hash", c.hash));
+          li.appendChild(el("span", "subject", c.subject));
+          li.appendChild(diffEl(c));
+          li.appendChild(el("span", "author", c.author));
+          li.appendChild(el("span", "stamp", c.date));
+          li.title = c.subject + " — " + c.author + ", " + c.date;
+          ul.appendChild(li);
+        }
+        skip += PAGE;
+        count += data.commits.length;
+        hasMore = !!data.hasMore;
+        sub.textContent =
+          (data.grep ? data.grep + " · " + data.branch : data.branch) +
+          " · " +
+          count +
+          " commits" +
+          (hasMore ? "+" : "");
+        if (count === 0) sub.textContent = (data.grep || data.branch) + " · no commits found";
+      } finally {
+        fetching = false;
+      }
+      if (activeProject === project) maybeLoadMore();
+    }
+
+    function maybeLoadMore() {
+      if (fetching || !hasMore || detail.hidden) return;
+      const threshold = 240;
+      const near =
+        detail.scrollHeight > detail.clientHeight + 1
+          ? detail.scrollTop + detail.clientHeight >= detail.scrollHeight - threshold
+          : detail.getBoundingClientRect().bottom - window.innerHeight <= threshold;
+      if (near) loadPage();
+    }
+
+    window.addEventListener("scroll", maybeLoadMore, { passive: true });
+    detail.addEventListener("scroll", maybeLoadMore, { passive: true });
+    stopDetailPaging = () => {
+      hasMore = false;
+      window.removeEventListener("scroll", maybeLoadMore);
+      detail.removeEventListener("scroll", maybeLoadMore);
+    };
+
+    loadPage();
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!panel.hidden) toggleSettings(false);
+    else if (!detail.hidden) closeDetail();
+    else if (soloProject) {
+      soloProject = null;
+      if (latest) render(latest);
+    }
+  });
+
+  // Settings: picture motive, dither effect, and flip — persisted per browser.
+  const bg = document.getElementById("bg");
+  const panel = document.getElementById("settings-page");
+  const flipBox = document.getElementById("bg-flip");
+  const stored = JSON.parse(localStorage.getItem("wt-settings") || "{}");
+  if (stored.motive == null && ["a", "b", "c"].includes(stored.bg))
+    stored.motive = stored.bg;
+  delete stored.bg;
+  // a/b/c used to be Night bloom / Black pine / Daylight. Original flower
+  // is a again; those three shifted to b/c/d. Shift saved picks once.
+  if (!stored.v4bg && ["a", "b", "c"].includes(stored.motive)) {
+    stored.motive = { a: "b", b: "c", c: "d" }[stored.motive];
+    stored.v4bg = 1;
+  }
+  const settings = Object.assign(
+    { motive: "a", dither: "fine", flip: true },
+    stored
+  );
+
+  const MOTIVE_ORDER = ["a", "b", "c", "d"];
+  const DITHER_ORDER = ["fine", "poster", "none"];
+  function applySettings() {
+    if (!MOTIVE_ORDER.includes(settings.motive)) settings.motive = "a";
+    if (!DITHER_ORDER.includes(settings.dither)) settings.dither = "fine";
+    const light = settings.motive === "d";
+    bg.style.backgroundImage = `url("/background-${settings.motive}.png?v=5")`;
+    bg.classList.toggle("flip", settings.flip);
+    bg.classList.toggle("light", light);
+    bg.classList.toggle("dither-fine", settings.dither === "fine");
+    bg.classList.toggle("dither-poster", settings.dither === "poster");
+    document.documentElement.classList.toggle("light-bg", light);
+    document.querySelectorAll('input[name="dither"]').forEach((r) => {
+      r.checked = r.value === settings.dither;
+    });
+    flipBox.checked = settings.flip;
+    localStorage.setItem("wt-settings", JSON.stringify(settings));
+  }
+
+  // The title is the settings switch: clicking it presses "Worktrees" into
+  // the chrome and swaps the board for the settings page.
+  function toggleSettings(open) {
+    const on = open != null ? open : panel.hidden;
+    panel.hidden = !on;
+    board.hidden = on;
+    if (on && !detail.hidden) closeDetail(), (board.hidden = true);
+    title.classList.toggle("pressed", on);
+  }
+  title.addEventListener("click", () => toggleSettings());
+
+  // Hover the title for 30s (without leaving) → trees + work bags rain.
+  const RAIN_EMOJIS = ["🌳", "🌲", "🌴", "🌳", "🌲", "🌴", "👜", "💼"];
+  let rainArmTimer = null;
+  let rainSpawnTimer = null;
+  let rainStopTimer = null;
+  let rainOverlay = null;
+
+  function stopEmojiRain() {
+    clearInterval(rainSpawnTimer);
+    clearTimeout(rainStopTimer);
+    rainSpawnTimer = rainStopTimer = null;
+    document.removeEventListener("click", stopEmojiRain, true);
+    if (rainOverlay) {
+      rainOverlay.remove();
+      rainOverlay = null;
+    }
+  }
+
+  function spawnRainDrop() {
+    if (!rainOverlay) return;
+    const drop = el("span", "drop", RAIN_EMOJIS[(Math.random() * RAIN_EMOJIS.length) | 0]);
+    const drift = (Math.random() * 160 - 80) | 0;
+    const spin = (200 + Math.random() * 520) * (Math.random() < 0.5 ? -1 : 1);
+    drop.style.left = Math.random() * 100 + "vw";
+    drop.style.fontSize = 18 + Math.random() * 34 + "px";
+    drop.style.animationDuration = 3.2 + Math.random() * 5.5 + "s";
+    drop.style.setProperty("--drift", drift + "px");
+    drop.style.setProperty("--spin", spin + "deg");
+    drop.addEventListener("animationend", () => drop.remove());
+    rainOverlay.appendChild(drop);
+  }
+
+  function startEmojiRain() {
+    if (rainOverlay) return;
+    rainOverlay = el("div");
+    rainOverlay.id = "emoji-rain";
+    document.body.appendChild(rainOverlay);
+    for (let i = 0; i < 28; i++) spawnRainDrop();
+    rainSpawnTimer = setInterval(() => {
+      const n = 2 + ((Math.random() * 3) | 0);
+      for (let i = 0; i < n; i++) spawnRainDrop();
+    }, 90);
+    rainStopTimer = setTimeout(stopEmojiRain, 16000);
+    document.addEventListener("click", stopEmojiRain, true);
+  }
+
+  title.addEventListener("mouseenter", () => {
+    clearTimeout(rainArmTimer);
+    rainArmTimer = setTimeout(startEmojiRain, 30000);
+  });
+  title.addEventListener("mouseleave", () => {
+    clearTimeout(rainArmTimer);
+    rainArmTimer = null;
+  });
+  document.getElementById("add-project").addEventListener("click", async () => {
+    if (picking) return;
+    picking = true;
+    try {
+      const res = await fetch("/api/projects/pick", { method: "POST" });
+      if (res.status === 204 || res.status === 400) return;
+      if (res.ok) await load();
+    } finally {
+      picking = false;
+    }
+  });
+  document.getElementById("cycle-bg").addEventListener("click", () => {
+    settings.motive =
+      MOTIVE_ORDER[(MOTIVE_ORDER.indexOf(settings.motive) + 1) % MOTIVE_ORDER.length];
+    applySettings();
+  });
+  document.querySelectorAll('input[name="dither"]').forEach((r) => {
+    r.addEventListener("change", () => {
+      settings.dither = r.value;
+      applySettings();
+    });
+  });
+  flipBox.addEventListener("change", () => {
+    settings.flip = flipBox.checked;
+    applySettings();
+  });
+  applySettings();
+  renderSettingsProjects();
+
+  // Live board: poll continuously; a failed poll replaces the title in red
+  // and the next tick recovers on its own.
+  setInterval(load, 10000);
+  load();
+</script>
