@@ -429,7 +429,9 @@
   }
 
   const SCRUB_THRESHOLD = 3;
-  const SCRUB_PX_PER_MINUTE = 4;
+  // 1px = 2 minutes: a hand-width drag covers hours, a screen covers days,
+  // and shift (hours) / alt (days) still multiply on top.
+  const SCRUB_PX_PER_MINUTE = 0.5;
   const SCRUB_BODY_CLASS = "stamp-scrub-active";
 
   function formatStamp(ms) {
@@ -546,15 +548,12 @@
       let lastAt = startAt;
       let accumulated = 0;
       let lastClientX = event.clientX;
+      let lastClientY = event.clientY;
       let frame = 0;
 
-      // Pin the cursor for the whole drag (Consistency-style); movement keeps
-      // arriving as movementX. Falls back to the captured drag + hidden
-      // cursor when the lock is refused.
-      try {
-        target.requestPointerLock();
-      } catch {}
-
+      // No pointer lock: Safari fronts a "Press Esc" banner for it. The
+      // body-class cursor:none hides the cursor for the drag instead, and
+      // the aggressive px-per-minute keeps the travel short.
       const paint = () => {
         frame = 0;
         valueEl.textContent = commit.date;
@@ -566,13 +565,14 @@
         target,
         pointerId: event.pointerId,
         onMove: (moveEvent) => {
-          // movementX only while the lock holds (clientX is frozen then);
-          // otherwise clientX deltas — movementX is unreliable unlocked.
+          // Both axes drive the scrub: right and up go forward in time,
+          // left and down go back.
           const raw =
-            document.pointerLockElement === target
-              ? moveEvent.movementX
-              : moveEvent.clientX - lastClientX;
+            moveEvent.clientX -
+            lastClientX -
+            (moveEvent.clientY - lastClientY);
           lastClientX = moveEvent.clientX;
+          lastClientY = moveEvent.clientY;
           accumulated += raw;
           if (!didDrag && Math.abs(accumulated) < SCRUB_THRESHOLD) return;
           if (!didDrag) {
@@ -596,7 +596,6 @@
         onEnd: (_event, reason) => {
           document.body.classList.remove(SCRUB_BODY_CLASS);
           stamp.classList.remove("scrubbing");
-          if (document.pointerLockElement) document.exitPointerLock();
           if (frame) {
             cancelAnimationFrame(frame);
             frame = 0;
