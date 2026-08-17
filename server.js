@@ -325,7 +325,9 @@ async function projectData(project) {
 }
 
 const LOG_FORMAT = [
-  "--date=format:%d %b, %H:%M",
+  // format-local, not format: rows must render in the same timezone as the
+  // client's formatStamp, or the value jumps the moment a scrub grabs it.
+  "--date=format-local:%d %b, %H:%M",
   "--shortstat",
   "--pretty=format:%h\x1f%H\x1f%s\x1f%cr\x1f%an\x1f%cd\x1f%at",
 ];
@@ -362,7 +364,9 @@ function parseCommits(log) {
 
 function clampUnix(at) {
   const min = Date.parse("2005-04-07T00:00:00Z") / 1000;
-  const max = Date.now() / 1000 + 86400 * 2;
+  // Hard ceiling at now, floored to the minute so the minute-rounding below
+  // can never nudge a stamp past it — a commit is never from the future.
+  const max = Math.floor(Date.now() / 60000) * 60;
   const n = Number(at);
   if (!Number.isFinite(n)) return null;
   return Math.round(Math.min(max, Math.max(min, n)) / 60) * 60;
@@ -385,9 +389,20 @@ async function assertKnownWorktree(folder) {
   throw new Error("Path is not a tracked project");
 }
 
+// Every rebase renames commits, but an optimistic client may still hold
+// pre-rebase hashes for rows it hasn't refreshed. Each rewrite records
+// old hash → new hash for the whole branch so a stale target can be chased
+// to the commit's current identity instead of mis-resolving.
+const renamedCommits = new Map();
+function resolveRenamed(hash) {
+  let h = hash;
+  for (let i = 0; renamedCommits.has(h) && i < 100; i++) h = renamedCommits.get(h);
+  return h;
+}
+
 async function rewriteCommitDate(cwd, rev, unixSeconds) {
   const date = new Date(unixSeconds * 1000).toISOString();
-  const full = (await git(cwd, ["rev-parse", rev])).trim();
+  const full = (await git(cwd, ["rev-parse", resolveRenamed(rev)])).trim();
   const head = (await git(cwd, ["rev-parse", "HEAD"])).trim();
   const env = { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date };
   const gitDir = path.resolve(cwd, (await git(cwd, ["rev-parse", "--git-dir"])).trim());
@@ -401,9 +416,23 @@ async function rewriteCommitDate(cwd, rev, unixSeconds) {
   const staged = (await git(cwd, ["diff", "--cached", "--name-only"])).trim();
   if (staged) throw new Error("Staged changes — commit or unstage first");
 
+  // The rebase renames every commit from the target onward, so the target's
+  // new hash has to be recovered by position: it sits the same number of
+  // commits behind the new HEAD as it did behind the old one. The before /
+  // after lists pair up the same way, which is what fills renamedCommits.
+  const distance = Number((await git(cwd, ["rev-list", "--count", full + "..HEAD"])).trim());
+  const before = (await git(cwd, ["rev-list", "-n", "1000", "HEAD"])).trim().split("\n");
+  const rewrittenHash = async () => {
+    const after = (await git(cwd, ["rev-list", "-n", "1000", "HEAD"])).trim().split("\n");
+    if (after.length === before.length)
+      for (let i = 0; i < before.length; i++)
+        if (before[i] !== after[i]) renamedCommits.set(before[i], after[i]);
+    return (await git(cwd, ["rev-parse", "HEAD~" + distance])).trim();
+  };
+
   if (full === head) {
     await git(cwd, ["commit", "--amend", "--no-edit", "--date", date], env);
-    return;
+    return rewrittenHash();
   }
 
   const dirty = (await git(cwd, ["status", "--porcelain"])).trim();
@@ -447,6 +476,16 @@ async function rewriteCommitDate(cwd, rev, unixSeconds) {
     fs.unlink(seq, () => {});
     if (stashed) await git(cwd, ["stash", "pop"]).catch(() => {});
   }
+  return rewrittenHash();
+}
+
+// One rewrite at a time, globally: the client fires these in the background
+// now, and two rebases racing in the same repo corrupt each other.
+let rewriteChain = Promise.resolve();
+function serializeRewrite(job) {
+  const run = rewriteChain.then(job, job);
+  rewriteChain = run.catch(() => {});
+  return run;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -516,8 +555,14 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         const cwd = await assertKnownWorktree(payload.path);
-        await rewriteCommitDate(cwd, hash, unix);
-        json(res, 200, { ok: true, at: unix, date: formatTimestamp(unix * 1000) });
+        const full = await serializeRewrite(() => rewriteCommitDate(cwd, hash, unix));
+        json(res, 200, {
+          ok: true,
+          at: unix,
+          date: formatTimestamp(unix * 1000),
+          full,
+          hash: full ? full.slice(0, 7) : undefined,
+        });
       } catch (err) {
         json(res, 500, { error: String(err.message || err).split("\n")[0] });
       }

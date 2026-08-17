@@ -146,14 +146,13 @@
   }
   .stamp:has(.stamp-handle) { cursor: ew-resize; }
   .stamp-value { position: relative; z-index: 1; }
-  /* Consistency-style hover handle: a 1px horizontal rule under the value. */
+  /* Hit area covers the date; the mark is a 1px black line through its middle. */
   .stamp-handle {
     position: absolute;
     left: 12px;
     right: 0;
-    top: 50%;
-    height: 14px;
-    transform: translateY(-50%);
+    top: 0;
+    bottom: 0;
     z-index: 2;
     touch-action: none;
     cursor: ew-resize;
@@ -162,55 +161,19 @@
     position: absolute;
     left: 0;
     right: 0;
-    top: auto;
-    bottom: 2px;
+    top: 50%;
     height: 1px;
-    transform: none;
-    background: currentColor;
-    outline: 1px solid #fff;
+    margin-top: -0.5px;
+    background: #000;
     opacity: 0;
-    transition: opacity 120ms ease-out;
     pointer-events: none;
   }
-  .stamp:hover .stamp-handle-line { opacity: 1; }
-  .stamp.scrubbing .stamp-handle-line { opacity: 0; }
+  .stamp:hover .stamp-handle-line,
+  .stamp.scrubbing .stamp-handle-line { opacity: 1; }
+  /* Fallback for when pointer lock is refused: the cursor still vanishes
+     while scrubbing, and the row's own value is the only feedback. */
   body.stamp-scrub-active,
   body.stamp-scrub-active * { cursor: none !important; }
-  .stamp-scrub-cursor {
-    position: fixed;
-    width: 0;
-    height: 0;
-    pointer-events: none;
-    z-index: 9999;
-  }
-  .stamp-scrub-cursor-line {
-    position: absolute;
-    left: -28px;
-    top: -1px;
-    width: 56px;
-    height: 1px;
-    background: currentColor;
-    outline: 1px solid #fff;
-  }
-  .stamp-scrub-cursor-label {
-    position: absolute;
-    left: 32px;
-    top: -22px;
-    font-size: 11px;
-    font-weight: 400;
-    font-variant-numeric: tabular-nums;
-    color: #fff;
-    background: color-mix(in srgb, currentColor 68%, #111);
-    padding: 3px 4px;
-    border-radius: 3px;
-    line-height: 1;
-    white-space: nowrap;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
-  }
-  html.light-bg .stamp-scrub-cursor-label {
-    color: #111;
-    background: color-mix(in srgb, currentColor 42%, #fff);
-  }
   /* Created dates sit on a full-opacity, weight-500 branch row. Same 0.5 as
      the shared .stamp — a notch above the old extra fade (0.375) so the
      headline stamp is more legible, still quieter than the branch name. */
@@ -456,7 +419,6 @@
   let pendingRemove = null;
   let picking = false;
   let stampScrubbing = false;
-  let stampCursorEl = null;
   const PAGE = 100;
 
   function el(tag, cls, text) {
@@ -540,23 +502,32 @@
     };
   }
 
-  function showStampCursor(x, y, text, color) {
-    if (!stampCursorEl) {
-      stampCursorEl = el("div", "stamp-scrub-cursor");
-      stampCursorEl.appendChild(el("span", "stamp-scrub-cursor-line"));
-      stampCursorEl.appendChild(el("span", "stamp-scrub-cursor-label"));
-      document.body.appendChild(stampCursorEl);
-    }
-    stampCursorEl.style.left = x + "px";
-    stampCursorEl.style.top = y + "px";
-    stampCursorEl.style.color = color || "";
-    stampCursorEl.querySelector(".stamp-scrub-cursor-label").textContent = text;
+  // Rewrites are optimistic: the scrubbed date stays on screen the moment the
+  // pointer lifts, and the git rebase runs in the background. Jobs are
+  // serialized per repo — a second scrub queues behind the first instead of
+  // colliding with its rebase — and the board reloads (for descendant hashes)
+  // only after the queue drains, never mid-scrub.
+  const rewriteQueues = new Map();
+  function enqueueRewrite(key, job) {
+    const prev = rewriteQueues.get(key) || Promise.resolve();
+    const run = prev.catch(() => {}).then(job);
+    rewriteQueues.set(
+      key,
+      run.catch(() => {})
+    );
+    return run;
   }
 
-  function hideStampCursor() {
-    if (!stampCursorEl) return;
-    stampCursorEl.remove();
-    stampCursorEl = null;
+  let quietReloadTimer = 0;
+  function scheduleQuietReload() {
+    clearTimeout(quietReloadTimer);
+    quietReloadTimer = setTimeout(() => {
+      if (stampScrubbing) {
+        scheduleQuietReload();
+        return;
+      }
+      load();
+    }, 400);
   }
 
   function bindStampScrub(stamp, commit, ctx) {
@@ -569,22 +540,36 @@
       event.preventDefault();
       event.stopPropagation();
 
-      const startX = event.clientX;
-      const startY = event.clientY;
       const startAt = Number(commit.at);
-      const color = getComputedStyle(stamp).color;
       const target = event.currentTarget;
       let didDrag = false;
       let lastAt = startAt;
       let accumulated = 0;
-      let lastClientX = startX;
+      let lastClientX = event.clientX;
+      let frame = 0;
+
+      // Pin the cursor for the whole drag (Consistency-style); movement keeps
+      // arriving as movementX. Falls back to the captured drag + hidden
+      // cursor when the lock is refused.
+      try {
+        target.requestPointerLock();
+      } catch {}
+
+      const paint = () => {
+        frame = 0;
+        valueEl.textContent = commit.date;
+        const row = stamp.closest("li");
+        if (row) row.title = commit.subject + " — " + commit.author + ", " + commit.date;
+      };
 
       beginPointerCaptureDrag({
         target,
         pointerId: event.pointerId,
         onMove: (moveEvent) => {
+          // movementX only while the lock holds (clientX is frozen then);
+          // otherwise clientX deltas — movementX is unreliable unlocked.
           const raw =
-            typeof moveEvent.movementX === "number" && Number.isFinite(moveEvent.movementX)
+            document.pointerLockElement === target
               ? moveEvent.movementX
               : moveEvent.clientX - lastClientX;
           lastClientX = moveEvent.clientX;
@@ -595,58 +580,69 @@
             stampScrubbing = true;
             stamp.classList.add("scrubbing");
             document.body.classList.add(SCRUB_BODY_CLASS);
-            showStampCursor(startX, startY, formatStamp(startAt * 1000), color);
           }
           const unit = moveEvent.altKey ? 86400 : moveEvent.shiftKey ? 3600 : 60;
           const steps = Math.round(accumulated / SCRUB_PX_PER_MINUTE);
           const min = Date.parse("2005-04-07T00:00:00Z") / 1000;
-          const max = Date.now() / 1000 + 86400;
+          const max = Math.floor(Date.now() / 60000) * 60;
           const nextAt = Math.round(Math.min(max, Math.max(min, startAt + steps * unit)) / 60) * 60;
           if (nextAt === lastAt) return;
           lastAt = nextAt;
           commit.at = nextAt;
           commit.date = formatStamp(nextAt * 1000);
-          valueEl.textContent = commit.date;
-          const row = stamp.closest("li");
-          if (row) row.title = commit.subject + " — " + commit.author + ", " + commit.date;
-          showStampCursor(startX, startY, commit.date, color);
+          // One DOM write per frame keeps the drag butter smooth.
+          if (!frame) frame = requestAnimationFrame(paint);
         },
-        onEnd: async (_event, reason) => {
+        onEnd: (_event, reason) => {
           document.body.classList.remove(SCRUB_BODY_CLASS);
           stamp.classList.remove("scrubbing");
-          hideStampCursor();
+          if (document.pointerLockElement) document.exitPointerLock();
+          if (frame) {
+            cancelAnimationFrame(frame);
+            frame = 0;
+          }
+          stampScrubbing = false;
           const revert = () => {
             commit.at = startAt;
             commit.date = formatStamp(startAt * 1000);
-            valueEl.textContent = commit.date;
-            stampScrubbing = false;
+            if (valueEl.isConnected) valueEl.textContent = commit.date;
           };
-          if (!didDrag) {
-            stampScrubbing = false;
-            return;
-          }
+          if (!didDrag) return;
           if (reason !== "pointerup" || lastAt === startAt) {
             revert();
             return;
           }
-          try {
+          // Optimistic: the scrubbed value is already on screen and stays
+          // there; the rebase runs behind it. The old hash is only needed to
+          // find the commit, and the response carries the rewritten hash so
+          // an immediate re-scrub of the same row targets the right commit.
+          valueEl.textContent = commit.date;
+          const at = lastAt;
+          const oldFull = commit.full;
+          enqueueRewrite(ctx.path, async () => {
             const res = await fetch("/api/commit-date", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ path: ctx.path, hash: commit.full, at: lastAt }),
+              body: JSON.stringify({ path: ctx.path, hash: oldFull, at }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || String(res.status));
-            commit.at = data.at || lastAt;
+            commit.at = data.at || at;
             commit.date = data.date || formatStamp(commit.at * 1000);
-            valueEl.textContent = commit.date;
-            stampScrubbing = false;
-            await load();
-          } catch (err) {
+            if (data.full) {
+              commit.full = data.full;
+              commit.hash = data.hash || data.full.slice(0, commit.hash.length);
+              const row = stamp.closest("li");
+              const hashEl = row && row.querySelector(".hash");
+              if (hashEl) hashEl.textContent = commit.hash;
+            }
+            if (valueEl.isConnected) valueEl.textContent = commit.date;
+          }).then(scheduleQuietReload, (err) => {
             revert();
             title.textContent = "Could not rewrite date";
             title.classList.add("fail");
-          }
+            scheduleQuietReload();
+          });
         },
       });
     });
