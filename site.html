@@ -82,9 +82,11 @@
   header h1.pressed { color: #111; }
   header .meta { font-size: 13px; color: #666; }
   #board {
-    columns: 340px;
+    /* Never more than two columns, however wide the window gets. */
+    columns: 2 340px;
     column-gap: 48px;
     width: calc(100% - 340px - 48px);
+    max-width: 1200px;
   }
   .project {
     break-inside: avoid;
@@ -185,12 +187,15 @@
       opacity: 0.9;
     }
   }
-  /* Download links sit inside normal copy; the underline is the affordance. */
-  .project a.dl {
+  /* Nothing in Worktrees is underlined except external links (PRs). The
+     download links read as copy; hover is the only affordance they need. */
+  .project a.dl,
+  .sgroup a.dl {
     color: inherit;
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    text-decoration: none;
   }
+  .project a.dl:hover,
+  .sgroup a.dl:hover { opacity: 0.6; }
 </style>
 
 <header>
@@ -233,69 +238,53 @@
   <section class="project" id="what" style="--c:#c1b6dd">
     <h2>Worktrees</h2>
     <div class="count">desktop app</div>
-    <p>A Mac app that shows every open git worktree. One board for all your projects — branches, unique commits, pull requests, and dirty files.</p>
+    <p>Every open git worktree, one board. All your projects.</p>
   </section>
   <section class="project" id="download" style="--c:#a6d9c9">
     <h2><a href="/download/mac" class="dl">Download</a></h2>
     <div class="count">macOS · Apple Silicon</div>
-    <p><a href="/download/mac" class="dl">Worktrees for Mac</a> — a frameless desktop app. Download it, open it, and the board is just there.</p>
-    <p>The app is not notarized yet: on first launch macOS will object, and you approve it once under System Settings → Privacy &amp; Security → “Open Anyway”.</p>
+    <p><a href="/download/mac" class="dl">Worktrees for Mac</a> — download it, open it, done.</p>
+    <p>Not notarized yet: approve the first launch under Privacy &amp; Security.</p>
   </section>
   <section class="project" id="board-feature" style="--c:#d6cfc1">
     <h2>The board</h2>
     <div class="count">columns</div>
-    <p>Every project is a column. Under it: the git worktrees that are actually open — extra checkouts of that repo, each on its own branch.</p>
-    <p>The main folder you cloned is not counted as a worktree. If a project has none, it stays off the board. You can still see it in settings.</p>
-    <p>Each project has its own pastel. Columns are 340px wide and fill leftover space; the last column of the page is always left empty.</p>
+    <p>Every project is a column; under it, its open worktrees. No worktrees, no column.</p>
   </section>
   <section class="project" id="branches" style="--c:#a6d9c9">
     <h2>Branches</h2>
     <div class="count">name, PR, dirty, created</div>
-    <p>Each worktree is listed by its branch name, in the same rhythm as a commit row.</p>
-    <p>If that branch has an open pull request on GitHub, the name is a link. A draft PR is underlined with dashes.</p>
-    <p>Uncommitted work shows as “3 changed files”, plus when you last touched them. The date on the right is when the worktree was created.</p>
+    <p>Branch name, dirty files, creation date. An open PR makes the name a link.</p>
   </section>
   <section class="project" id="commits" style="--c:#c9d9a6">
     <h2>Commits</h2>
     <div class="count">unique to the tree</div>
-    <p>You only see commits that are not already on the main branch. Shared history does not repeat under every tree. Merge commits stay off the board.</p>
-    <p><span class="k">+12</span> is lines added, in the project color. <span class="k">−4</span> is lines removed, in grey. Zero counts are omitted.</p>
-    <p>If the branch name contains an ID like <span class="k">Mf42tC-3</span>, only commits that mention that ID are listed.</p>
+    <p>Only commits the main branch doesn’t have, with <span class="k">+12</span> <span class="k">−4</span> line counts.</p>
   </section>
   <section class="project" id="focus" style="--c:#b2bddd">
     <h2>Focus</h2>
     <div class="count">click to isolate</div>
-    <p>Click a project name to hide everything else. The other columns stay in place so nothing jumps.</p>
-    <p>Click the “2 worktrees” line to look at one tree at a time.</p>
-    <p>Click in the empty space to the left or right of the column to move to the previous or next project. Press Escape to walk back one step.</p>
+    <p>Click a project to isolate it. Escape walks back.</p>
   </section>
   <section class="project" id="history" style="--c:#ded5a1">
     <h2>History</h2>
     <div class="count">full log</div>
-    <p>Click the project name a second time to read the full git log — hash, subject, diff, date — same as the board, just longer.</p>
-    <p>Keep scrolling to load more, a hundred commits at a time. Click the branch count to switch which branch you are reading.</p>
-    <p>Click the name again to return to the full board.</p>
+    <p>Click a project name twice for the full log. Scroll for more.</p>
   </section>
   <section class="project" id="projects" style="--c:#dfaec9">
     <h2>Projects</h2>
     <div class="count">add and remove</div>
-    <p>Click the Worktrees title (top left) to open settings.</p>
-    <p>Click Projects to add a folder with the macOS picker. Click a project to remove it — it asks Yes / No, and never deletes the folder on disk.</p>
-    <p>The list lives in <span class="k">projects.json</span>. Git is never rewritten.</p>
+    <p>Click the title for settings, add folders with the picker. Nothing on disk is ever touched.</p>
   </section>
   <section class="project" id="atmosphere" style="--c:#a8d6ae">
     <h2>Atmosphere</h2>
     <div class="count">picture, dither, flip</div>
-    <p>Click Background to cycle the picture: flower, Night bloom, Black pine, Daylight.</p>
-    <p>Choose Fine dither, Posterized, or None. Check Upside down to flip the picture. Daylight is the light theme.</p>
-    <p>The picture is remembered on your Mac.</p>
+    <p>Pick the picture, the dither, the orientation.</p>
   </section>
   <section class="project" id="live" style="--c:#abcfd9">
     <h2>Live</h2>
     <div class="count">every ten seconds</div>
-    <p>The board reloads from git every ten seconds. A failed poll turns the title red; the next tick recovers on its own.</p>
-    <p>Pull requests come from the <span class="k">gh</span> CLI, cached two minutes per repo. Pankado remotes use JAS-Pankado; everything else uses Jo4712.</p>
-    <p>Everything stays on your Mac. Nothing is uploaded anywhere — the app reads your repos directly.</p>
+    <p>The board follows git on its own. Everything stays on your Mac.</p>
   </section>
 </main>
 
