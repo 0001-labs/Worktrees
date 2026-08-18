@@ -24,7 +24,17 @@ function createWindow(port) {
     minHeight: 480,
     title: "Worktrees",
     backgroundColor: "#161616",
+    // Fully chromeless: the board goes edge to edge. The page header acts
+    // as the drag handle (CSS injected below); Cmd+W / Cmd+Q still work.
+    frame: false,
     webPreferences: { contextIsolation: true },
+  });
+  win.webContents.on("did-finish-load", () => {
+    win.webContents.insertCSS(
+      "header { -webkit-app-region: drag; } " +
+        "header h1, header .meta, header a, header button, header input " +
+        "{ -webkit-app-region: no-drag; }"
+    );
   });
   // PR links etc. belong in the real browser, not this window.
   win.webContents.setWindowOpenHandler(({ url }) => {
