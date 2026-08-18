@@ -24,9 +24,9 @@ function createWindow(port) {
     minHeight: 480,
     title: "Worktrees",
     backgroundColor: "#161616",
-    // Fully chromeless: the board goes edge to edge. The page header acts
-    // as the drag handle (CSS injected below); Cmd+W / Cmd+Q still work.
-    frame: false,
+    // Ghostty-style: no title bar, content edge to edge, but the native
+    // traffic lights float over the top-left corner.
+    titleBarStyle: "hiddenInset",
     webPreferences: { contextIsolation: true },
   });
   win.webContents.on("did-finish-load", () => {
