@@ -12,3 +12,5 @@ node_modules/
 # Neighboring project worktrees — not part of this dashboard
 Woodstock/
 Thailand Tours/
+node_modules/
+dist-app/

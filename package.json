@@ -1,0 +1,43 @@
+{
+  "name": "worktrees",
+  "productName": "Worktrees",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local dashboard for git worktrees and commits across projects.",
+  "main": "app/main.js",
+  "scripts": {
+    "start": "node server.js",
+    "app": "electron .",
+    "build:mac": "electron-builder --mac --arm64"
+  },
+  "devDependencies": {
+    "electron": "^38.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "dev.0001.worktrees",
+    "productName": "Worktrees",
+    "directories": {
+      "output": "dist-app"
+    },
+    "files": [
+      "app/**",
+      "server.js",
+      "index.html",
+      "background-a.png",
+      "background-b.png",
+      "background-c.png",
+      "background-d.png",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "app/icon.icns",
+      "identity": null,
+      "target": [
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
+      ]
+    }
+  }
+}

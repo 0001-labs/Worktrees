@@ -8,9 +8,13 @@ const path = require("path");
 const { execFile } = require("child_process");
 
 const PORT = Number(process.env.PORT) || 4777;
-const PROJECTS_FILE = path.join(__dirname, "projects.json");
+// Packaged app: the bundle is read-only, so mutable state (projects.json,
+// uploaded backgrounds) lives in the data dir Electron points us at.
+const DATA_DIR = process.env.WORKTREES_DATA_DIR || __dirname;
+const APP_MODE = !!process.env.WORKTREES_DATA_DIR;
+const PROJECTS_FILE = path.join(DATA_DIR, "projects.json");
 
-const DEFAULT_PROJECTS = [
+const HARDCODED_PROJECTS = [
   { name: "0001", path: "/Users/joachim/0001/0001", color: "#d6cfc1" },
   { name: "Consistency", path: "/Users/joachim/0001/Consistency", color: "#a6d9c9" },
   { name: "Edge", path: "/Users/joachim/0001/Edge", color: "#c1b6dd" },
@@ -25,7 +29,11 @@ const DEFAULT_PROJECTS = [
   { name: "Tekstiltryk", path: "/Users/joachim/Tekstiltryk", color: "#dbb2d8" },
 ];
 
-const PALETTE = [...new Set(DEFAULT_PROJECTS.map((p) => p.color))];
+const PALETTE = [...new Set(HARDCODED_PROJECTS.map((p) => p.color))];
+
+// In the packaged app a fresh install starts empty (the folder picker fills
+// it); the dev checkout keeps its hardcoded list.
+const DEFAULT_PROJECTS = APP_MODE ? [] : HARDCODED_PROJECTS;
 
 let projectsCache = { mtime: -1, list: DEFAULT_PROJECTS };
 let pickingFolder = false;
@@ -667,7 +675,7 @@ const server = http.createServer(async (req, res) => {
         res.end("expected a PNG data URL");
         return;
       }
-      fs.writeFile(path.join(__dirname, "background-a.png"), Buffer.from(m[1], "base64"), (err) => {
+      fs.writeFile(path.join(DATA_DIR, "background-a.png"), Buffer.from(m[1], "base64"), (err) => {
         res.writeHead(err ? 500 : 200);
         res.end(err ? String(err) : "ok");
       });
@@ -675,14 +683,23 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (/^\/background-[a-d]\.png$/.test(url.pathname)) {
-    fs.readFile(path.join(__dirname, url.pathname.slice(1)), (err, img) => {
-      if (err) {
-        res.writeHead(404);
-        res.end();
+    // An uploaded background (data dir) wins over the bundled default.
+    const name = url.pathname.slice(1);
+    fs.readFile(path.join(DATA_DIR, name), (err, img) => {
+      if (!err) {
+        res.writeHead(200, { "Content-Type": "image/png" });
+        res.end(img);
         return;
       }
-      res.writeHead(200, { "Content-Type": "image/png" });
-      res.end(img);
+      fs.readFile(path.join(__dirname, name), (err2, img2) => {
+        if (err2) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "image/png" });
+        res.end(img2);
+      });
     });
     return;
   }
@@ -697,6 +714,12 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Worktrees dashboard on http://localhost:${PORT}`);
-});
+// Run directly: listen on the fixed port. Required (by the Electron shell):
+// the caller picks the port and starts listening itself.
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`Worktrees dashboard on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = { server };

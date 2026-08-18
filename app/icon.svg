@@ -1,0 +1,8 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- macOS-style rounded square, full bleed at 1024 with margin -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#161616"/>
+  <!-- three worktree columns in the dashboard's pastels, staggered like commit rows -->
+  <rect x="255" y="300" width="120" height="424" rx="60" fill="#d6cfc1"/>
+  <rect x="452" y="380" width="120" height="344" rx="60" fill="#a6d9c9"/>
+  <rect x="649" y="300" width="120" height="264" rx="60" fill="#c1b6dd"/>
+</svg>
