@@ -204,8 +204,8 @@
     min-width: 0;
   }
   .worktree .branch .bname {
-    flex: 1;
-    min-width: 0;
+    flex: 1 1 6em;
+    min-width: 5em;
     overflow: hidden;
     white-space: nowrap;
     color: inherit;
@@ -214,11 +214,18 @@
     mask-image: linear-gradient(to right, #000 80%, transparent);
   }
   a.bname.draft { text-decoration: underline dashed; }
-  .worktree .branch .dirty { flex-shrink: 0; }
+  /* Dirty copy is long ("2 changed files · last touched …"). If it cannot
+     shrink, a 340px column leaves the name with zero width. */
   .worktree .branch .dirty {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
     font-size: 12px;
     font-weight: 400;
     opacity: 0.7;
+    -webkit-mask-image: linear-gradient(to right, #000 80%, transparent);
+    mask-image: linear-gradient(to right, #000 80%, transparent);
   }
   .worktree .empty,
   .log-body .empty {
