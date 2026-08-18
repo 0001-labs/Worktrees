@@ -277,6 +277,14 @@
     align-content: start;
   }
   .sgroup h2 { font-size: 16px; font-weight: 500; margin-bottom: 14px; color: #111; }
+  /* Background + orientation share one row: two halves of the same 340px
+     lane the projects list uses, so the settings stay one column wide. */
+  .sgroup-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 40px;
+    width: 340px;
+  }
   #add-project, #cycle-bg { cursor: pointer; }
   /* Background / orientation: same idea as the title — clickable text,
      on vs off is only a color shift. Native inputs stay for change events
@@ -399,16 +407,18 @@
     <h2 id="add-project">Projects</h2>
     <ul id="settings-projects" class="plist"></ul>
   </section>
-  <section class="sgroup">
-    <h2 id="cycle-bg">Background</h2>
-    <label><input type="radio" name="dither" value="fine" /> Fine dither</label>
-    <label><input type="radio" name="dither" value="poster" /> Posterized</label>
-    <label><input type="radio" name="dither" value="none" /> None</label>
-  </section>
-  <section class="sgroup">
-    <h2>Orientation</h2>
-    <label><input type="checkbox" id="bg-flip" /> Upside down</label>
-  </section>
+  <div class="sgroup-row">
+    <section class="sgroup">
+      <h2 id="cycle-bg">Background</h2>
+      <label><input type="radio" name="dither" value="fine" /> Fine dither</label>
+      <label><input type="radio" name="dither" value="poster" /> Posterized</label>
+      <label><input type="radio" name="dither" value="none" /> None</label>
+    </section>
+    <section class="sgroup">
+      <h2>Orientation</h2>
+      <label><input type="checkbox" id="bg-flip" /> Upside down</label>
+    </section>
+  </div>
 </div>
 <div id="board"></div>
 
