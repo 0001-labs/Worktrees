@@ -554,53 +554,69 @@
 
   // Scramble effect from the 0001 site: characters flicker through random
   // hex glyphs and settle left to right. Runs when a rewritten hash lands.
-  const scrambleFrames = new WeakMap();
+  // One shared ticker drives every active roll: N simultaneous rolls cost a
+  // single rAF chain and settle in lockstep by construction.
+  const scrambleJobs = new Map();
+  let scrambleFrame = 0;
+  let scrambleLast = 0;
   function scrambleText(el, text) {
-    cancelAnimationFrame(scrambleFrames.get(el) || 0);
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       el.textContent = text;
       return;
     }
+    scrambleJobs.set(el, {
+      text,
+      control: (el.textContent || "").split(""),
+      pointer: 0,
+    });
+    if (scrambleFrame) return;
     const glyph = () => "0123456789abcdef"[(Math.random() * 16) | 0];
-    const control = (el.textContent || "").split("");
-    let pointer = 0;
-    let lastFrame = 0;
-    const tick = () => {
-      if (pointer < text.length) {
-        control[pointer] = 3 + ((Math.random() * 2) | 0);
-        pointer += 1;
-      }
-      control.length = text.length;
-      let output = "";
-      for (let i = 0; i < control.length; i += 1) {
-        const slot = control[i];
-        if (typeof slot === "number" && slot > 0) {
-          output += glyph();
-          if (i < pointer) control[i] = slot - 1;
-        } else if (slot === 0 || slot === text[i]) {
-          output += text[i];
-          control[i] = text[i];
-        } else {
-          output += typeof slot === "string" ? slot : glyph();
+    const loop = (now) => {
+      scrambleFrame = 0;
+      if (now - scrambleLast >= 1000 / 42) {
+        scrambleLast = now;
+        for (const [target, job] of scrambleJobs) {
+          if (!target.isConnected) {
+            scrambleJobs.delete(target);
+            continue;
+          }
+          if (job.pointer < job.text.length) {
+            job.control[job.pointer] = 3 + ((Math.random() * 2) | 0);
+            job.pointer += 1;
+          }
+          job.control.length = job.text.length;
+          let output = "";
+          for (let i = 0; i < job.control.length; i += 1) {
+            const slot = job.control[i];
+            if (typeof slot === "number" && slot > 0) {
+              output += glyph();
+              if (i < job.pointer) job.control[i] = slot - 1;
+            } else if (slot === 0 || slot === job.text[i]) {
+              output += job.text[i];
+              job.control[i] = job.text[i];
+            } else {
+              output += typeof slot === "string" ? slot : glyph();
+            }
+          }
+          target.textContent = output;
+          if (output === job.text) scrambleJobs.delete(target);
         }
       }
-      el.textContent = output;
-      if (output !== text) scrambleFrames.set(el, requestAnimationFrame(frame));
+      if (scrambleJobs.size) scrambleFrame = requestAnimationFrame(loop);
     };
-    const frame = (now) => {
-      if (now - lastFrame < 1000 / 42) {
-        scrambleFrames.set(el, requestAnimationFrame(frame));
-        return;
-      }
-      lastFrame = now;
-      tick();
-    };
-    scrambleFrames.set(el, requestAnimationFrame(frame));
+    scrambleFrame = requestAnimationFrame(loop);
   }
 
-  // While a date is dragged past its neighbors the row swims to where it
-  // now belongs, so the list always reads in chronological order. FLIP
-  // transforms keep the move smooth instead of a jump.
+  // Hashes from the previous render, keyed by branch + subject occurrence. A
+  // date rebase rewrites the scrubbed commit AND every descendant; diffing at
+  // render time lets all rewritten hashes roll in the same frame instead of
+  // one row early and the rest silently.
+  let prevHashes = new Map();
+
+  // On release the row swims to where its new date belongs, so the list
+  // reads chronologically again. FLIP transforms keep the move smooth
+  // instead of a jump. Never called mid-drag — a row moving under the
+  // cursor while scrubbing reads as jumpy.
   function resortRow(li) {
     const ul = li && li.parentElement;
     if (!ul) return;
@@ -654,11 +670,8 @@
       const paint = () => {
         frame = 0;
         valueEl.textContent = commit.date;
-        const row = stamp.closest("li");
-        if (row) {
-          row.dataset.at = commit.at;
-          resortRow(row);
-        }
+        // No live resort: the row moving under the cursor mid-drag reads as
+        // jumpy. The release handler settles position and order in one step.
       };
 
       beginPointerCaptureDrag({
@@ -740,8 +753,8 @@
             if (data.full) {
               commit.full = data.full;
               commit.hash = data.hash || data.full.slice(0, commit.hash.length);
-              const hashEl = row && row.querySelector(".hash");
-              if (hashEl) scrambleText(hashEl, commit.hash);
+              // No scramble here: the quiet reload rolls this hash together
+              // with every rewritten descendant in one synchronized frame.
             }
             if (valueEl.isConnected) valueEl.textContent = commit.date;
           }).then(scheduleQuietReload, (err) => {
@@ -856,10 +869,16 @@
     return stamp;
   }
 
-  function commitLi(commit, ctx) {
+  function commitLi(commit, ctx, prevHash) {
     const li = el("li");
     li.dataset.at = commit.at || "";
-    li.appendChild(el("span", "hash", commit.hash));
+    const hashEl = el("span", "hash", commit.hash);
+    if (prevHash && prevHash !== commit.hash) {
+      // Start from the old hash so the roll reads as a rewrite, not a swap.
+      hashEl.textContent = prevHash;
+      scrambleText(hashEl, commit.hash);
+    }
+    li.appendChild(hashEl);
     li.appendChild(el("span", "subject", commit.subject));
     li.appendChild(diffEl(commit));
     li.appendChild(stampEl(commit, ctx));
@@ -1084,6 +1103,7 @@
       return;
     }
     latest = data;
+    const nextHashes = new Map();
     renderSettingsProjects();
     if (
       soloProject &&
@@ -1208,13 +1228,21 @@
           // Scrub handles only on purely local worktrees: a PR means the
           // branch is public, and the server refuses those anyway.
           const ctx = wt.pr ? null : { path: wt.path, project: project.name };
-          for (const c of commits) ul.appendChild(commitLi(c, ctx));
+          const seen = new Map();
+          for (const c of commits) {
+            const n = seen.get(c.subject) || 0;
+            seen.set(c.subject, n + 1);
+            const key = project.name + "" + worktreeLabel(wt) + "" + c.subject + "" + n;
+            ul.appendChild(commitLi(c, ctx, prevHashes.get(key)));
+            nextHashes.set(key, c.hash);
+          }
           div.appendChild(ul);
         }
         section.appendChild(div);
       });
       board.appendChild(section);
     }
+    prevHashes = nextHashes;
     // Clean header: nothing shown while everything is healthy.
     updated.textContent = "";
     title.textContent = "Worktrees";
