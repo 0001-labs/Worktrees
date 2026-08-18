@@ -1003,7 +1003,9 @@
 
         if (commits.length > 0) {
           const ul = el("ul");
-          const ctx = { path: wt.path, project: project.name };
+          // Scrub handles only on purely local worktrees: a PR means the
+          // branch is public, and the server refuses those anyway.
+          const ctx = wt.pr ? null : { path: wt.path, project: project.name };
           for (const c of commits) ul.appendChild(commitLi(c, ctx));
           div.appendChild(ul);
         }
@@ -1075,7 +1077,8 @@
           hasMore = false;
           return;
         }
-        for (const c of data.commits) ul.appendChild(commitLi(c, { path: project.path }));
+        // The inline log shows the main branch — view-only, never scrubbable.
+        for (const c of data.commits) ul.appendChild(commitLi(c, null));
         skip += PAGE;
         hasMore = !!data.hasMore;
         if (skip === PAGE && data.commits.length === 0) {

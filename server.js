@@ -400,9 +400,26 @@ function resolveRenamed(hash) {
   return h;
 }
 
+// Scrubbing rewrites history, which is only harmless while it is purely
+// local. Refuse the main checkout, any branch that has been pushed (has an
+// upstream), and any commit already reachable from a remote — rewriting
+// those forces a force-push and breaks everyone who pulled them.
+async function assertScrubbable(cwd, full) {
+  const gitDir = path.resolve(cwd, (await git(cwd, ["rev-parse", "--git-dir"])).trim());
+  const common = path.resolve(cwd, (await git(cwd, ["rev-parse", "--git-common-dir"])).trim());
+  if (gitDir === common) throw new Error("Main checkout — scrub only in a local worktree");
+  const upstream = (
+    await git(cwd, ["rev-parse", "--abbrev-ref", "@{upstream}"]).catch(() => "")
+  ).trim();
+  if (upstream) throw new Error("Branch is pushed (" + upstream + ") — scrubbing is local-only");
+  const onRemote = (await git(cwd, ["branch", "-r", "--contains", full]).catch(() => "")).trim();
+  if (onRemote) throw new Error("Commit is already on a remote — scrubbing is local-only");
+}
+
 async function rewriteCommitDate(cwd, rev, unixSeconds) {
   const date = new Date(unixSeconds * 1000).toISOString();
   const full = (await git(cwd, ["rev-parse", resolveRenamed(rev)])).trim();
+  await assertScrubbable(cwd, full);
   const head = (await git(cwd, ["rev-parse", "HEAD"])).trim();
   const env = { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date };
   const gitDir = path.resolve(cwd, (await git(cwd, ["rev-parse", "--git-dir"])).trim());
