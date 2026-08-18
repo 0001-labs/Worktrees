@@ -755,6 +755,95 @@
     });
   }
 
+  // Scrub a worktree's creation date. Same feel as the commit stamps, but it
+  // rewrites only the ".git" pointer file's birthtime — no commits touched,
+  // no hashes change, so it is safe on any local worktree, PRs included.
+  function bindCreatedScrub(stamp, wt) {
+    const hit = stamp.querySelector(".stamp-handle");
+    const valueEl = stamp.querySelector(".stamp-value");
+    if (!hit || !valueEl) return;
+
+    hit.addEventListener("pointerdown", (event) => {
+      if (!event.isPrimary || event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startMs = Number(wt.createdMs);
+      let value = startMs;
+      let didDrag = false;
+      let accumulated = 0;
+      let lastClientX = event.clientX;
+      let lastClientY = event.clientY;
+      let frame = 0;
+
+      const paint = () => {
+        frame = 0;
+        valueEl.textContent = formatStamp(value);
+      };
+
+      beginPointerCaptureDrag({
+        target: event.currentTarget,
+        pointerId: event.pointerId,
+        onMove: (moveEvent) => {
+          const raw =
+            moveEvent.clientX -
+            lastClientX -
+            (moveEvent.clientY - lastClientY);
+          lastClientX = moveEvent.clientX;
+          lastClientY = moveEvent.clientY;
+          accumulated += raw;
+          if (!didDrag && Math.abs(accumulated) < SCRUB_THRESHOLD) return;
+          if (!didDrag) {
+            didDrag = true;
+            stampScrubbing = true;
+            stamp.classList.add("scrubbing");
+            document.body.classList.add(SCRUB_BODY_CLASS);
+          }
+          const unit = moveEvent.altKey ? 86400 : moveEvent.shiftKey ? 3600 : 60;
+          const steps = Math.round(accumulated / SCRUB_PX_PER_MINUTE);
+          const next = Math.min(
+            Math.floor(Date.now() / 60000) * 60000,
+            startMs + steps * unit * 1000
+          );
+          if (next === value) return;
+          value = next;
+          if (!frame) frame = requestAnimationFrame(paint);
+        },
+        onEnd: async (_event, reason) => {
+          document.body.classList.remove(SCRUB_BODY_CLASS);
+          stamp.classList.remove("scrubbing");
+          if (frame) {
+            cancelAnimationFrame(frame);
+            frame = 0;
+          }
+          stampScrubbing = false;
+          if (!didDrag) return;
+          if (reason !== "pointerup" || value === startMs) {
+            valueEl.textContent = formatStamp(startMs);
+            return;
+          }
+          valueEl.textContent = formatStamp(value);
+          try {
+            const res = await fetch(
+              "/api/worktree/created?path=" +
+                encodeURIComponent(wt.path) +
+                "&ms=" +
+                Math.round(value),
+              { method: "POST" }
+            );
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || String(res.status));
+            wt.createdMs = data.createdMs;
+            wt.created = data.created;
+            valueEl.textContent = data.created;
+          } catch {
+            valueEl.textContent = formatStamp(wt.createdMs);
+          }
+        },
+      });
+    });
+  }
+
   function stampEl(commit, ctx) {
     const stamp = el("span", "stamp");
     stamp.appendChild(el("span", "stamp-value", commit.date));
@@ -972,8 +1061,20 @@
             (wt.lastTouched ? " · last touched " + wt.lastTouched : "")
         )
       );
-    const stamp = wt.created || (commits[0] && commits[0].date);
-    if (stamp) row.appendChild(el("span", "stamp", stamp));
+    const stampText = wt.created || (commits[0] && commits[0].date);
+    if (stampText) {
+      const stamp = el("span", "stamp");
+      stamp.appendChild(el("span", "stamp-value", stampText));
+      // The creation date scrubs like a commit stamp, but rewrites only
+      // filesystem birthtime — hash-free, so PR worktrees are fine too.
+      if (wt.created && wt.createdMs && wt.path) {
+        const handle = el("span", "stamp-handle");
+        handle.appendChild(el("span", "stamp-handle-line"));
+        stamp.appendChild(handle);
+        bindCreatedScrub(stamp, wt);
+      }
+      row.appendChild(stamp);
+    }
     return row;
   }
 
