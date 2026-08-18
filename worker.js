@@ -12,7 +12,7 @@ export default {
           "Content-Type": "application/x-apple-diskimage",
           "Content-Length": String(object.size),
           "Content-Disposition": 'attachment; filename="Worktrees.dmg"',
-          "Cache-Control": "public, max-age=3600",
+          "Cache-Control": "no-cache",
         },
       });
     }

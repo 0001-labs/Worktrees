@@ -14,11 +14,12 @@
   },
   "devDependencies": {
     "electron": "^38.2.0",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.13"
   },
   "build": {
     "appId": "dev.0001.worktrees",
     "productName": "Worktrees",
+    "afterSign": "scripts/afterSign-mac.js",
     "directories": {
       "output": "dist-app"
     },
@@ -35,11 +36,20 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "app/icon.icns",
-      "identity": null,
+      "identity": "-",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "notarize": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
       "target": [
         { "target": "dmg", "arch": ["arm64"] },
         { "target": "zip", "arch": ["arm64"] }
       ]
+    },
+    "dmg": {
+      "icon": "app/icon.icns",
+      "sign": false
     }
   }
 }
