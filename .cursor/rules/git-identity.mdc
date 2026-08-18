@@ -1,0 +1,21 @@
+---
+description: 0001 git identity is Jo4712 only — never JAS-Pankado, never coding agents
+alwaysApply: true
+---
+
+# 0001 git identity: Jo4712 only
+
+HARD RULE for every git commit and push in this repo (org `0001-labs`). Do not skip. Do not rely on global git config (it is Pankado).
+
+- Author AND committer MUST be Jo4712 `<100180563+Jo4712@users.noreply.github.com>`
+- NEVER JAS-Pankado. NEVER `jas@pankado.com`. NEVER Danish. NEVER `(TT-XXX)`.
+- NEVER Cursor Agent / cursoragent / Cursor / any coding agent as author or committer.
+- NEVER add `Co-authored-by:` trailers for Cursor, cursoragent, or any coding agent. GitHub will list them as contributors.
+- Do NOT run `git config user.name` / `user.email` / `--global`.
+- On EVERY `git commit`, pass env:
+
+```
+GIT_AUTHOR_NAME=Jo4712 GIT_AUTHOR_EMAIL=100180563+Jo4712@users.noreply.github.com GIT_COMMITTER_NAME=Jo4712 GIT_COMMITTER_EMAIL=100180563+Jo4712@users.noreply.github.com git commit ...
+```
+
+Same identity for any path under `/Users/joachim/0001/` and orgs `0001-labs` / `woodstock-tokyo`. Pankado-kk and home-directory Pankado folders stay JAS-Pankado, but still NEVER attribute any coding agent.
