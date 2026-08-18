@@ -30,10 +30,15 @@ function createWindow(port) {
     webPreferences: { contextIsolation: true },
   });
   win.webContents.on("did-finish-load", () => {
-    win.webContents.insertCSS(
-      "header { -webkit-app-region: drag; } " +
-        "header h1, header .meta, header a, header button, header input " +
-        "{ -webkit-app-region: no-drag; }"
+    // app-region on in-page elements is unreliable once the body scrolls, so
+    // the drag handle is a fixed, invisible strip along the top edge.
+    win.webContents.executeJavaScript(
+      "(() => { if (document.getElementById('app-drag-strip')) return;" +
+        "const d = document.createElement('div');" +
+        "d.id = 'app-drag-strip';" +
+        "d.style.cssText = 'position:fixed;top:0;left:0;right:0;height:36px;" +
+        "z-index:2147483647;-webkit-app-region:drag';" +
+        "document.body.appendChild(d); })()"
     );
   });
   // PR links etc. belong in the real browser, not this window.
