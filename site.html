@@ -200,10 +200,9 @@
 <div id="bg"></div>
 <div id="settings-page" hidden>
   <section class="sgroup">
-    <h2>Run</h2>
-    <p>node server.js</p>
-    <p>http://localhost:4777</p>
-    <p><a href="/download/mac" class="dl">or download the Mac app</a></p>
+    <h2>Get</h2>
+    <p><a href="/download/mac" class="dl">Download for Mac</a></p>
+    <p>macOS · Apple Silicon</p>
   </section>
   <section class="sgroup">
     <h2>Features</h2>
@@ -233,13 +232,13 @@
 <main id="board">
   <section class="project" id="what" style="--c:#c1b6dd">
     <h2>Worktrees</h2>
-    <div class="count">local dashboard</div>
-    <p>A local dashboard of every open git worktree. One board for all your projects — branches, unique commits, pull requests, and dirty files.</p>
+    <div class="count">desktop app</div>
+    <p>A Mac app that shows every open git worktree. One board for all your projects — branches, unique commits, pull requests, and dirty files.</p>
   </section>
   <section class="project" id="download" style="--c:#a6d9c9">
     <h2><a href="/download/mac" class="dl">Download</a></h2>
     <div class="count">macOS · Apple Silicon</div>
-    <p><a href="/download/mac" class="dl">Worktrees for Mac</a> — the whole dashboard as a frameless app. Open it and the board is just there; no terminal, no browser tab.</p>
+    <p><a href="/download/mac" class="dl">Worktrees for Mac</a> — a frameless desktop app. Download it, open it, and the board is just there.</p>
     <p>The app is not notarized yet: on first launch macOS will object, and you approve it once under System Settings → Privacy &amp; Security → “Open Anyway”.</p>
   </section>
   <section class="project" id="board-feature" style="--c:#d6cfc1">
@@ -289,14 +288,14 @@
     <div class="count">picture, dither, flip</div>
     <p>Click Background to cycle the picture: flower, Night bloom, Black pine, Daylight.</p>
     <p>Choose Fine dither, Posterized, or None. Check Upside down to flip the picture. Daylight is the light theme.</p>
-    <p>The picture is remembered in this browser.</p>
+    <p>The picture is remembered on your Mac.</p>
   </section>
   <section class="project" id="live" style="--c:#abcfd9">
     <h2>Live</h2>
     <div class="count">every ten seconds</div>
     <p>The board reloads from git every ten seconds. A failed poll turns the title red; the next tick recovers on its own.</p>
     <p>Pull requests come from the <span class="k">gh</span> CLI, cached two minutes per repo. Pankado remotes use JAS-Pankado; everything else uses Jo4712.</p>
-    <p>Local only. Run <span class="k">node server.js</span>, then open <span class="k">http://localhost:4777</span>.</p>
+    <p>Everything stays on your Mac. Nothing is uploaded anywhere — the app reads your repos directly.</p>
   </section>
 </main>
 
@@ -326,12 +325,14 @@
     stored
   );
 
-  const MOTIVE_ORDER = ["a", "b", "c", "d"];
+  // The marketing site is light-only: motive "d" is the light picture, and
+  // it is pinned so the whole page always reads on cream.
+  const MOTIVE_ORDER = ["d"];
   const DITHER_ORDER = ["fine", "poster", "none"];
   function applySettings() {
-    if (!MOTIVE_ORDER.includes(settings.motive)) settings.motive = "a";
+    settings.motive = "d";
     if (!DITHER_ORDER.includes(settings.dither)) settings.dither = "fine";
-    const light = settings.motive === "d";
+    const light = true;
     bg.style.backgroundImage = `url("background-${settings.motive}.png?v=5")`;
     bg.classList.toggle("flip", settings.flip);
     bg.classList.toggle("light", light);
