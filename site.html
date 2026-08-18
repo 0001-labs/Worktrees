@@ -1,0 +1,181 @@
+<meta charset="utf-8" />
+<title>Worktrees by 0001</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { background: #e6e1d6; }
+  body { background: transparent; }
+  #bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: #e6e1d6 center / cover no-repeat url("background-d.png?v=5");
+    pointer-events: none;
+    transform: rotate(180deg);
+  }
+  #bg::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.28;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+  }
+  #bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 250, 242, 0.22);
+  }
+  body {
+    font-family: "GT America", "GT America Standard", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: color-mix(in srgb, #d6cfc1 52%, #1a1410);
+    padding: 48px 40px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 40px;
+  }
+  header h1 {
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  header h1 a {
+    color: #545454;
+    text-decoration: none;
+  }
+  header h1 a:hover { opacity: 0.6; }
+  #board { width: 340px; }
+  .project h2 {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 22px;
+  }
+  .features { list-style: none; }
+  .features li {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.45;
+  }
+  .features a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .features a:hover { opacity: 0.6; }
+  #emoji-rain {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  #emoji-rain .drop {
+    position: absolute;
+    top: 0;
+    line-height: 1;
+    will-change: transform;
+    animation: emoji-fall linear forwards;
+    user-select: none;
+  }
+  @keyframes emoji-fall {
+    0% {
+      transform: translate3d(0, -12vh, 0) rotate(0deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translate3d(var(--drift, 0px), 112vh, 0) rotate(var(--spin, 360deg));
+      opacity: 0.9;
+    }
+  }
+</style>
+
+<header>
+  <h1><a href="https://github.com/0001-labs/Worktrees">Worktrees by 0001</a></h1>
+</header>
+<div id="bg"></div>
+<main id="board">
+  <section class="project">
+    <h2>Features</h2>
+    <ul class="features">
+      <li>Worktrees</li>
+      <li>The board</li>
+      <li>Branches</li>
+      <li>Commits</li>
+      <li>Focus</li>
+      <li>History</li>
+      <li>Projects</li>
+      <li>Live</li>
+      <li><a href="/download/mac">Download app</a></li>
+    </ul>
+  </section>
+</main>
+
+<script>
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  const title = document.querySelector("header h1");
+  const RAIN_EMOJIS = ["🌳", "🌲", "🌴", "🌳", "🌲", "🌴", "👜", "💼"];
+  let rainArmTimer = null;
+  let rainSpawnTimer = null;
+  let rainStopTimer = null;
+  let rainOverlay = null;
+
+  function stopEmojiRain() {
+    clearInterval(rainSpawnTimer);
+    clearTimeout(rainStopTimer);
+    rainSpawnTimer = rainStopTimer = null;
+    document.removeEventListener("click", stopEmojiRain, true);
+    if (rainOverlay) {
+      rainOverlay.remove();
+      rainOverlay = null;
+    }
+  }
+
+  function spawnRainDrop() {
+    if (!rainOverlay) return;
+    const drop = el("span", "drop", RAIN_EMOJIS[(Math.random() * RAIN_EMOJIS.length) | 0]);
+    const drift = (Math.random() * 160 - 80) | 0;
+    const spin = (200 + Math.random() * 520) * (Math.random() < 0.5 ? -1 : 1);
+    drop.style.left = Math.random() * 100 + "vw";
+    drop.style.fontSize = 18 + Math.random() * 34 + "px";
+    drop.style.animationDuration = 3.2 + Math.random() * 5.5 + "s";
+    drop.style.setProperty("--drift", drift + "px");
+    drop.style.setProperty("--spin", spin + "deg");
+    drop.addEventListener("animationend", () => drop.remove());
+    rainOverlay.appendChild(drop);
+  }
+
+  function startEmojiRain() {
+    if (rainOverlay) return;
+    rainOverlay = el("div");
+    rainOverlay.id = "emoji-rain";
+    document.body.appendChild(rainOverlay);
+    for (let i = 0; i < 28; i++) spawnRainDrop();
+    rainSpawnTimer = setInterval(() => {
+      const n = 2 + ((Math.random() * 3) | 0);
+      for (let i = 0; i < n; i++) spawnRainDrop();
+    }, 90);
+    rainStopTimer = setTimeout(stopEmojiRain, 16000);
+    document.addEventListener("click", stopEmojiRain, true);
+  }
+
+  title.addEventListener("mouseenter", () => {
+    clearTimeout(rainArmTimer);
+    rainArmTimer = setTimeout(startEmojiRain, 30000);
+  });
+  title.addEventListener("mouseleave", () => {
+    clearTimeout(rainArmTimer);
+    rainArmTimer = null;
+  });
+</script>

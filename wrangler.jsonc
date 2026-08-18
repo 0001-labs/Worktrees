@@ -1,0 +1,15 @@
+{
+  "name": "worktrees-site",
+  "compatibility_date": "2026-08-18",
+  "main": "worker.js",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "routes": [
+    { "pattern": "worktrees.0001.dev", "custom_domain": true }
+  ],
+  "r2_buckets": [
+    { "binding": "APP_BUCKET", "bucket_name": "worktrees-app" }
+  ]
+}

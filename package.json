@@ -8,7 +8,9 @@
   "scripts": {
     "start": "node server.js",
     "app": "electron .",
-    "build:mac": "electron-builder --mac --arm64"
+    "build:mac": "electron-builder --mac --arm64",
+    "build:site": "rm -rf dist && mkdir dist && cp site.html dist/index.html && cp background-*.png dist/",
+    "deploy": "bun run build:site && bunx wrangler deploy"
   },
   "devDependencies": {
     "electron": "^38.2.0",
