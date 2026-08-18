@@ -3,65 +3,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  [hidden] { display: none !important; }
-  html { background: #000; }
-  html.light-bg { background: #e6e1d6; }
+  html { background: #e6e1d6; }
   body { background: transparent; }
   #bg {
     position: fixed;
     inset: 0;
     z-index: -1;
-    background: #000 center / cover no-repeat;
+    background: #e6e1d6 center / cover no-repeat url("background-d.png?v=5");
     pointer-events: none;
+    transform: rotate(180deg);
   }
-  html.light-bg #bg { background-color: #e6e1d6; }
-  #bg.flip { transform: rotate(180deg); }
-  #bg.dither-fine::before,
-  #bg.dither-poster::before {
+  #bg::before {
     content: "";
     position: absolute;
     inset: 0;
     pointer-events: none;
-  }
-  #bg.dither-fine::before {
-    opacity: 0.4;
-    mix-blend-mode: overlay;
+    opacity: 0.28;
+    mix-blend-mode: multiply;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     background-size: 180px 180px;
-  }
-  #bg.light.dither-fine::before {
-    mix-blend-mode: multiply;
-    opacity: 0.28;
-  }
-  #bg.dither-poster {
-    filter: contrast(1.65) saturate(0.4) brightness(1.03);
-  }
-  #bg.dither-poster::before {
-    opacity: 0.22;
-    mix-blend-mode: hard-light;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    background-size: 80px 80px;
   }
   #bg::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.82);
-  }
-  #bg.light::after {
     background: rgba(255, 250, 242, 0.22);
   }
-  html.light-bg .project {
-    color: color-mix(in srgb, var(--c, currentColor) 52%, #1a1410);
-  }
-  html.light-bg .project .count,
-  html.light-bg .hash {
-    opacity: 0.7;
-  }
-  html.light-bg .project p { opacity: 0.88; }
   body {
     font-family: "GT America", "GT America Standard", "Helvetica Neue", Helvetica, Arial, sans-serif;
-    color: #fff;
+    color: color-mix(in srgb, #d6cfc1 52%, #1a1410);
     padding: 48px 40px 80px;
     -webkit-font-smoothing: antialiased;
   }
@@ -75,93 +45,29 @@
     font-size: 22px;
     font-weight: 500;
     letter-spacing: -0.01em;
+  }
+  header h1 a {
     color: #545454;
-    cursor: pointer;
-    transition: color 0.15s ease;
+    text-decoration: none;
   }
-  header h1.pressed { color: #111; }
-  header .meta { font-size: 13px; color: #666; }
-  #board {
-    /* Never more than two columns, however wide the window gets. */
-    columns: 2 340px;
-    column-gap: 48px;
-    width: calc(100% - 340px - 48px);
-    max-width: 1200px;
-  }
-  .project {
-    break-inside: avoid;
-    padding-bottom: 44px;
-    color: var(--c);
-  }
+  header h1 a:hover { opacity: 0.6; }
+  #board { width: 340px; }
   .project h2 {
     font-size: 16px;
     font-weight: 500;
-    margin-bottom: 4px;
-    display: inline-block;
+    margin-bottom: 22px;
   }
-  .project .count { font-size: 13px; opacity: 0.55; padding-bottom: 22px; }
-  .project p {
+  .features { list-style: none; }
+  .features li {
     font-size: 13px;
+    font-weight: 500;
     line-height: 1.45;
-    opacity: 0.75;
   }
-  .project p + p { margin-top: 4px; }
-  .k {
-    font-family: "SF Mono", Menlo, monospace;
-    font-size: inherit;
-    opacity: 0.55;
-  }
-  #settings-page {
-    display: grid;
-    gap: 40px;
-    align-content: start;
-  }
-  .sgroup h2 { font-size: 16px; font-weight: 500; margin-bottom: 14px; color: #111; }
-  #cycle-bg { cursor: pointer; }
-  .sgroup p {
-    font-size: 13px;
-    color: #545454;
-    line-height: 1.45;
-    max-width: 340px;
-    padding: 4px 0;
-  }
-  .sgroup label {
-    display: block;
-    position: relative;
-    font-size: 13px;
-    color: #545454;
-    cursor: pointer;
-    padding: 4px 0;
-    transition: color 0.15s ease;
-  }
-  .sgroup label:hover { color: #6a6a6a; }
-  .sgroup label:has(input:checked) { color: #ccc; }
-  .sgroup label:has(input:checked):hover { color: #ddd; }
-  html.light-bg .sgroup label:has(input:checked) { color: #111; }
-  html.light-bg .sgroup label:has(input:checked):hover { color: #000; }
-  .sgroup label input {
-    appearance: none;
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-  .plist { list-style: none; width: 340px; }
-  .plist a {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    font-size: 13px;
-    padding: 4px 0;
-    color: var(--c);
+  .features a {
+    color: inherit;
     text-decoration: none;
   }
-  .plist .pname { flex: 1; }
+  .features a:hover { opacity: 0.6; }
   #emoji-rain {
     position: fixed;
     inset: 0;
@@ -187,104 +93,26 @@
       opacity: 0.9;
     }
   }
-  /* Nothing in Worktrees is underlined except external links (PRs). The
-     download links read as copy; hover is the only affordance they need. */
-  .project a.dl,
-  .sgroup a.dl {
-    color: inherit;
-    text-decoration: none;
-  }
-  .project a.dl:hover,
-  .sgroup a.dl:hover { opacity: 0.6; }
 </style>
 
 <header>
-  <h1>Worktrees</h1>
-  <div class="meta"></div>
+  <h1><a href="https://github.com/0001-labs/Worktrees">Worktrees by 0001</a></h1>
 </header>
 <div id="bg"></div>
-<div id="settings-page" hidden>
-  <section class="sgroup">
-    <h2>Get</h2>
-    <p><a href="/download/mac" class="dl">Download for Mac</a></p>
-    <p>macOS · Apple Silicon</p>
-  </section>
-  <section class="sgroup">
-    <h2>Features</h2>
-    <ul class="plist">
-      <li><a href="#what" style="--c:#c1b6dd"><span class="pname">Worktrees</span></a></li>
-      <li><a href="#board-feature" style="--c:#d6cfc1"><span class="pname">The board</span></a></li>
-      <li><a href="#branches" style="--c:#a6d9c9"><span class="pname">Branches</span></a></li>
-      <li><a href="#commits" style="--c:#c9d9a6"><span class="pname">Commits</span></a></li>
-      <li><a href="#focus" style="--c:#b2bddd"><span class="pname">Focus</span></a></li>
-      <li><a href="#history" style="--c:#ded5a1"><span class="pname">History</span></a></li>
-      <li><a href="#projects" style="--c:#dfaec9"><span class="pname">Projects</span></a></li>
-      <li><a href="#atmosphere" style="--c:#a8d6ae"><span class="pname">Atmosphere</span></a></li>
-      <li><a href="#live" style="--c:#abcfd9"><span class="pname">Live</span></a></li>
-    </ul>
-  </section>
-  <section class="sgroup">
-    <h2 id="cycle-bg">Background</h2>
-    <label><input type="radio" name="dither" value="fine" /> Fine dither</label>
-    <label><input type="radio" name="dither" value="poster" /> Posterized</label>
-    <label><input type="radio" name="dither" value="none" /> None</label>
-  </section>
-  <section class="sgroup">
-    <h2>Orientation</h2>
-    <label><input type="checkbox" id="bg-flip" /> Upside down</label>
-  </section>
-</div>
 <main id="board">
-  <section class="project" id="what" style="--c:#c1b6dd">
-    <h2>Worktrees</h2>
-    <div class="count">desktop app</div>
-    <p>Every open git worktree, one board. All your projects.</p>
-  </section>
-  <section class="project" id="download" style="--c:#a6d9c9">
-    <h2><a href="/download/mac" class="dl">Download</a></h2>
-    <div class="count">macOS · Apple Silicon</div>
-    <p><a href="/download/mac" class="dl">Worktrees for Mac</a> — download it, open it, done.</p>
-    <p>Not notarized yet: approve the first launch under Privacy &amp; Security.</p>
-  </section>
-  <section class="project" id="board-feature" style="--c:#d6cfc1">
-    <h2>The board</h2>
-    <div class="count">columns</div>
-    <p>Every project is a column; under it, its open worktrees. No worktrees, no column.</p>
-  </section>
-  <section class="project" id="branches" style="--c:#a6d9c9">
-    <h2>Branches</h2>
-    <div class="count">name, PR, dirty, created</div>
-    <p>Branch name, dirty files, creation date. An open PR makes the name a link.</p>
-  </section>
-  <section class="project" id="commits" style="--c:#c9d9a6">
-    <h2>Commits</h2>
-    <div class="count">unique to the tree</div>
-    <p>Only commits the main branch doesn’t have, with <span class="k">+12</span> <span class="k">−4</span> line counts.</p>
-  </section>
-  <section class="project" id="focus" style="--c:#b2bddd">
-    <h2>Focus</h2>
-    <div class="count">click to isolate</div>
-    <p>Click a project to isolate it. Escape walks back.</p>
-  </section>
-  <section class="project" id="history" style="--c:#ded5a1">
-    <h2>History</h2>
-    <div class="count">full log</div>
-    <p>Click a project name twice for the full log. Scroll for more.</p>
-  </section>
-  <section class="project" id="projects" style="--c:#dfaec9">
-    <h2>Projects</h2>
-    <div class="count">add and remove</div>
-    <p>Click the title for settings, add folders with the picker. Nothing on disk is ever touched.</p>
-  </section>
-  <section class="project" id="atmosphere" style="--c:#a8d6ae">
-    <h2>Atmosphere</h2>
-    <div class="count">picture, dither, flip</div>
-    <p>Pick the picture, the dither, the orientation.</p>
-  </section>
-  <section class="project" id="live" style="--c:#abcfd9">
-    <h2>Live</h2>
-    <div class="count">every ten seconds</div>
-    <p>The board follows git on its own. Everything stays on your Mac.</p>
+  <section class="project">
+    <h2>Features</h2>
+    <ul class="features">
+      <li>Worktrees</li>
+      <li>The board</li>
+      <li>Branches</li>
+      <li>Commits</li>
+      <li>Focus</li>
+      <li>History</li>
+      <li>Projects</li>
+      <li>Live</li>
+      <li><a href="/download/mac">Download app</a></li>
+    </ul>
   </section>
 </main>
 
@@ -297,55 +125,6 @@
   }
 
   const title = document.querySelector("header h1");
-  const bg = document.getElementById("bg");
-  const panel = document.getElementById("settings-page");
-  const manual = document.getElementById("board");
-  const flipBox = document.getElementById("bg-flip");
-  const stored = JSON.parse(localStorage.getItem("wt-settings") || "{}");
-  if (stored.motive == null && ["a", "b", "c"].includes(stored.bg))
-    stored.motive = stored.bg;
-  delete stored.bg;
-  if (!stored.v4bg && ["a", "b", "c"].includes(stored.motive)) {
-    stored.motive = { a: "b", b: "c", c: "d" }[stored.motive];
-    stored.v4bg = 1;
-  }
-  const settings = Object.assign(
-    { motive: "a", dither: "fine", flip: true },
-    stored
-  );
-
-  // The marketing site is light-only: motive "d" is the light picture, and
-  // it is pinned so the whole page always reads on cream.
-  const MOTIVE_ORDER = ["d"];
-  const DITHER_ORDER = ["fine", "poster", "none"];
-  function applySettings() {
-    settings.motive = "d";
-    if (!DITHER_ORDER.includes(settings.dither)) settings.dither = "fine";
-    const light = true;
-    bg.style.backgroundImage = `url("background-${settings.motive}.png?v=5")`;
-    bg.classList.toggle("flip", settings.flip);
-    bg.classList.toggle("light", light);
-    bg.classList.toggle("dither-fine", settings.dither === "fine");
-    bg.classList.toggle("dither-poster", settings.dither === "poster");
-    document.documentElement.classList.toggle("light-bg", light);
-    document.querySelectorAll('input[name="dither"]').forEach((r) => {
-      r.checked = r.value === settings.dither;
-    });
-    flipBox.checked = settings.flip;
-    localStorage.setItem("wt-settings", JSON.stringify(settings));
-  }
-
-  function toggleSettings(open) {
-    const on = open != null ? open : panel.hidden;
-    panel.hidden = !on;
-    manual.hidden = on;
-    title.classList.toggle("pressed", on);
-  }
-  title.addEventListener("click", () => toggleSettings());
-  document.querySelectorAll(".plist a").forEach((a) => {
-    a.addEventListener("click", () => toggleSettings(false));
-  });
-
   const RAIN_EMOJIS = ["🌳", "🌲", "🌴", "🌳", "🌲", "🌴", "👜", "💼"];
   let rainArmTimer = null;
   let rainSpawnTimer = null;
@@ -399,23 +178,4 @@
     clearTimeout(rainArmTimer);
     rainArmTimer = null;
   });
-  document.getElementById("cycle-bg").addEventListener("click", () => {
-    settings.motive =
-      MOTIVE_ORDER[(MOTIVE_ORDER.indexOf(settings.motive) + 1) % MOTIVE_ORDER.length];
-    applySettings();
-  });
-  document.querySelectorAll('input[name="dither"]').forEach((r) => {
-    r.addEventListener("change", () => {
-      settings.dither = r.value;
-      applySettings();
-    });
-  });
-  flipBox.addEventListener("change", () => {
-    settings.flip = flipBox.checked;
-    applySettings();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !panel.hidden) toggleSettings(false);
-  });
-  applySettings();
 </script>
