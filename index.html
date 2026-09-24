@@ -40,8 +40,15 @@
     --m05: calc(var(--m) * 0.5);
     --m2: calc(var(--m) * 2);
     --m4: calc(var(--m) * 4);
-    /* A board column: 17 modules. */
+    /* DS one cells: text sits in the 19px track, the 1px rule below it is
+       left free (--item-height + --margin-correction in one.css). */
+    --cell: calc(19px * var(--sf));
+    --rule: calc(1px * var(--sf));
+    /* A board column: 17 modules. Inside it, commit rows use fixed tracks
+       for the hash (3 modules) and the date (5 modules). */
     --col: calc(var(--m) * 17);
+    --hash-w: calc(var(--m) * 3);
+    --stamp-w: calc(var(--m) * 5);
     --type-size-default: calc(14px * var(--sf));
     --type-size-heading: calc(15px * var(--sf));
     --grid-color: rgba(255, 255, 255, 0.14);
@@ -126,11 +133,13 @@
   html.light-bg .log li { opacity: 0.88; }
   html.light-bg .worktree .empty,
   html.light-bg .log-body .empty { opacity: 0.6; }
-  /* Every line of text is one module tall, so rows land on grid tracks. */
+  /* Every line of text is one module tall: set in the 19px cell, with the
+     1px rule under it as padding, so text centers in a grid cell and never
+     straddles a rule — the way Ezo's rows sit on DS one. */
   body {
     font-family: "GT America DS1", "GT America", "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: var(--type-size-default);
-    line-height: var(--m);
+    line-height: var(--cell);
     color: #fff;
     padding: var(--m2) var(--m2) var(--m4);
     -webkit-font-smoothing: antialiased;
@@ -141,10 +150,24 @@
     justify-content: space-between;
     margin-bottom: var(--m2);
   }
+  header h1,
+  .project h2,
+  .project .count,
+  .project .error,
+  .worktree .branch,
+  .worktree li,
+  .log li,
+  .worktree .empty,
+  .log-body .empty,
+  .sgroup h2,
+  .sgroup label,
+  .plist li {
+    line-height: var(--cell);
+    padding-bottom: var(--rule);
+  }
   header h1 {
     font-size: var(--type-size-heading);
     font-weight: 500;
-    line-height: var(--m);
     color: #545454;
     cursor: pointer;
     transition: color 0.15s ease;
@@ -176,9 +199,8 @@
   .project h2 {
     font-size: var(--type-size-heading);
     font-weight: 500;
-    line-height: var(--m);
     cursor: pointer;
-    display: inline-block;
+    width: fit-content;
     text-decoration: none;
   }
   /* Solo: other projects stay in the column flow so the focused one does not
@@ -187,15 +209,14 @@
   .project.off { visibility: hidden; }
   html.side-west, html.side-west * { cursor: w-resize; }
   html.side-east, html.side-east * { cursor: e-resize; }
+  /* The date owns the last 5 modules of every row, so all dates in a
+     column start on the same track. */
   .stamp {
+    grid-column: stamp;
     font-weight: 400;
     opacity: 0.5;
-    flex-shrink: 0;
-    margin-left: auto;
-    padding-left: var(--m05);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
-    min-width: 7.6em;
     position: relative;
     user-select: none;
   }
@@ -204,7 +225,7 @@
   /* Hit area covers the date; the mark is a 1px black line through its middle. */
   .stamp-handle {
     position: absolute;
-    left: var(--m05);
+    left: 0;
     right: 0;
     top: 0;
     bottom: 0;
@@ -238,7 +259,7 @@
   }
   /* One module under the count before the first branch. Padding, not
      margin, so CSS columns cannot discard it at a fragment break. */
-  .project .count { opacity: 0.55; padding-bottom: var(--m); }
+  .project .count { opacity: 0.55; padding-bottom: calc(var(--rule) + var(--m)); }
   .project .count.cycle {
     cursor: pointer;
     width: max-content;
@@ -246,17 +267,30 @@
   }
   .project .error { opacity: 0.5; font-style: italic; }
   .worktree { margin-bottom: var(--m); }
-  /* Same size, line-height and timestamp treatment as the commit rows so the
-     branch line sits in the identical rhythm; weight alone sets it apart. */
-  .worktree .branch {
-    font-weight: 500;
+  /* Rows are DS one grids: [hash 3 modules][subject][diff][date 5 modules].
+     Hash, subject and date start on grid tracks; the diff hugs the date.
+     The branch row uses the same tracks — name (+ dirty) spans hash and
+     subject — so its date lines up with the commit dates under it. */
+  .worktree .branch,
+  .worktree li,
+  .log li {
+    display: grid;
+    grid-template-columns:
+      [hash] var(--hash-w) [subject] minmax(0, 1fr) [diff] auto [stamp] var(--stamp-w) [end];
+    align-items: baseline;
+    min-width: 0;
+  }
+  .worktree .branch { font-weight: 500; }
+  .worktree .branch .bmain {
+    grid-column: 1 / diff;
     display: flex;
     align-items: baseline;
     gap: var(--m05);
     min-width: 0;
   }
+  /* The name keeps its full width first; dirty copy gets what is left. */
   .worktree .branch .bname {
-    flex: 1 1 6em;
+    flex: 0 1 auto;
     min-width: 5em;
     overflow: hidden;
     white-space: nowrap;
@@ -269,7 +303,7 @@
   /* Dirty copy is long ("2 changed files · last touched …"). If it cannot
      shrink, a 17-module column leaves the name with zero width. */
   .worktree .branch .dirty {
-    flex: 0 1 auto;
+    flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
@@ -286,21 +320,19 @@
   .worktree ul,
   .log { list-style: none; }
   .worktree li,
-  .log li {
-    opacity: 0.75;
-    display: flex;
-    gap: var(--m05);
-  }
+  .log li { opacity: 0.75; }
   .worktree li .hash,
   .log li .hash {
+    grid-column: hash;
     opacity: 0.55;
-    flex-shrink: 0;
+    overflow: hidden;
+    white-space: nowrap;
     font-family: "Iosevka", "SF Mono", Menlo, monospace;
     font-size: inherit;
   }
   .worktree li .subject,
   .log li .subject {
-    flex: 1;
+    grid-column: subject;
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
@@ -308,8 +340,14 @@
     mask-image: linear-gradient(to right, #000 80%, transparent);
   }
   li .diff,
-  .branch .diff { flex-shrink: 0; opacity: 0.6; padding-left: var(--m05); white-space: nowrap; }
-  .branch .diff { font-weight: 400; padding-left: var(--m025); }
+  .branch .diff {
+    grid-column: diff;
+    opacity: 0.6;
+    padding: 0 var(--m05);
+    white-space: nowrap;
+    text-align: right;
+  }
+  .branch .diff { font-weight: 400; }
   /* Deletions always sit in neutral grey — only additions carry the project
      color. Zero counts are omitted entirely. */
   li .diff .minus,
@@ -326,7 +364,6 @@
   .sgroup h2 {
     font-size: var(--type-size-heading);
     font-weight: 500;
-    line-height: var(--m);
     margin-bottom: var(--m);
     color: #111;
   }
@@ -513,9 +550,17 @@
   }
   html.mobile .plist,
   html.mobile .sgroup-row { width: auto; }
-  /* Twelve modules is narrower than a desktop column: let the date take
-     only its own width so the commit subject keeps some room. */
-  html.mobile .stamp { min-width: 0; }
+  /* Twelve modules is narrower than a desktop column: phones drop the hash
+     track so the commit subject keeps its room; the date track stays. */
+  html.mobile .worktree .branch,
+  html.mobile .worktree li,
+  html.mobile .log li {
+    grid-template-columns:
+      [subject] minmax(0, 1fr) [diff] auto [stamp] var(--stamp-w) [end];
+  }
+  html.mobile li .hash { display: none; }
+  /* Triple tap is the phone's ggg / lll: keep taps from zooming. */
+  html.mobile { touch-action: manipulation; }
 </style>
 
 <header data-area="header">
@@ -1214,7 +1259,9 @@
       name.rel = "noopener";
       if (wt.pr.state === "open" && wt.pr.draft) name.classList.add("draft");
     }
-    row.appendChild(name);
+    const main = el("span", "bmain");
+    main.appendChild(name);
+    row.appendChild(main);
     if (!wt) return row;
     const commits = wt.commits || [];
     const totals = commits.reduce(
@@ -1224,7 +1271,7 @@
     if (totals.p > 0 || totals.m > 0)
       row.appendChild(diffEl({ plus: totals.p, minus: totals.m }));
     if (wt.dirty > 0)
-      row.appendChild(
+      main.appendChild(
         el(
           "span",
           "dirty",
@@ -1657,8 +1704,8 @@
   renderSettingsProjects();
 
   // 0001 page shortcuts: ggg toggles the DS one grid overlay, lll the
-  // layout view. Three presses of the same key, no modifiers, not while
-  // typing in a field.
+  // layout view (triple tap on iPhone, below). Three presses of the same
+  // key, no modifiers, not while typing in a field.
   const gridOverlay = document.getElementById("grid");
   let keyRun = "";
   let keyRunAt = 0;
@@ -1675,8 +1722,68 @@
     keyRunAt = now;
     if (keyRun.length < 3) return;
     keyRun = "";
-    if (key === "g") gridOverlay.hidden = !gridOverlay.hidden;
-    else document.documentElement.classList.toggle("lll");
+    if (key === "g") toggleGrid();
+    else toggleLayoutView();
+  });
+  function toggleGrid() {
+    gridOverlay.hidden = !gridOverlay.hidden;
+  }
+  function toggleLayoutView() {
+    document.documentElement.classList.toggle("lll");
+  }
+
+  // iPhone has no keyboard: triple tap with one finger is ggg, triple tap
+  // with two fingers is lll. A tap is short and barely moves; three of
+  // them with the same finger count, each within 400ms of the last.
+  let tapFingers = 0;
+  let tapStart = 0;
+  let tapX = 0;
+  let tapY = 0;
+  let tapMoved = false;
+  let tapRun = 0;
+  let tapRunFingers = 0;
+  let tapLast = 0;
+  document.addEventListener(
+    "touchstart",
+    (e) => {
+      if (tapFingers === 0) {
+        tapStart = Date.now();
+        tapX = e.touches[0].clientX;
+        tapY = e.touches[0].clientY;
+        tapMoved = false;
+      }
+      tapFingers = Math.max(tapFingers, e.touches.length);
+    },
+    { passive: true }
+  );
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      const t = e.touches[0];
+      if (t && Math.hypot(t.clientX - tapX, t.clientY - tapY) > 10) tapMoved = true;
+    },
+    { passive: true }
+  );
+  document.addEventListener("touchend", (e) => {
+    if (e.touches.length > 0) return;
+    const fingers = tapFingers;
+    tapFingers = 0;
+    const now = Date.now();
+    if (tapMoved || now - tapStart > 300 || fingers > 2) {
+      tapRun = 0;
+      return;
+    }
+    tapRun = now - tapLast < 400 && fingers === tapRunFingers ? tapRun + 1 : 1;
+    tapRunFingers = fingers;
+    tapLast = now;
+    if (tapRun < 3) return;
+    tapRun = 0;
+    if (fingers === 1) toggleGrid();
+    else toggleLayoutView();
+  });
+  document.addEventListener("touchcancel", () => {
+    tapFingers = 0;
+    tapRun = 0;
   });
 
   // Live board: poll continuously; a failed poll replaces the title in red
