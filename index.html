@@ -1,7 +1,54 @@
 <meta charset="utf-8" />
 <title>Worktrees</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<!-- Add to Home Screen on iOS runs the board full screen, like an app. -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Worktrees" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <style>
+  /* DS one fonts: Standard Regular/Medium as one family so font-weight 400
+     and 500 pick the right cut; Iosevka is the DS one mono. */
+  @font-face {
+    font-family: "GT America DS1";
+    src: url("/fonts/GT-America-Standard-Regular.woff2") format("woff2");
+    font-weight: 400;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "GT America DS1";
+    src: url("/fonts/GT-America-Standard-Medium.woff2") format("woff2");
+    font-weight: 500;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Iosevka";
+    src: url("/fonts/Iosevka-Regular.woff2") format("woff2");
+    font-display: swap;
+  }
+  /* DS one grid: 19px tracks + 1px gaps = a 20px module (--1). Every size
+     below is a module fraction or multiple, times --sf. Desktop keeps --sf
+     at 1; on phones the script sets it to viewport / 280 (DS one's base
+     width), so the same layout fills the 14-column mobile grid. */
+  :root {
+    --sf: 1;
+    --1: 20px;
+    --m: calc(var(--1) * var(--sf));
+    --m01: calc(var(--m) * 0.1);
+    --m025: calc(var(--m) * 0.25);
+    --m05: calc(var(--m) * 0.5);
+    --m2: calc(var(--m) * 2);
+    --m4: calc(var(--m) * 4);
+    /* A board column: 17 modules. */
+    --col: calc(var(--m) * 17);
+    --type-size-default: calc(14px * var(--sf));
+    --type-size-heading: calc(15px * var(--sf));
+    --grid-color: rgba(255, 255, 255, 0.14);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  html.light-bg { --grid-color: #1e1e1e2b; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   [hidden] { display: none !important; }
   html { background: #000; }
@@ -79,22 +126,25 @@
   html.light-bg .log li { opacity: 0.88; }
   html.light-bg .worktree .empty,
   html.light-bg .log-body .empty { opacity: 0.6; }
+  /* Every line of text is one module tall, so rows land on grid tracks. */
   body {
-    font-family: "GT America", "GT America Standard", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-family: "GT America DS1", "GT America", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: var(--type-size-default);
+    line-height: var(--m);
     color: #fff;
-    padding: 48px 40px 80px;
+    padding: var(--m2) var(--m2) var(--m4);
     -webkit-font-smoothing: antialiased;
   }
   header {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    margin-bottom: 40px;
+    margin-bottom: var(--m2);
   }
   header h1 {
-    font-size: 22px;
+    font-size: var(--type-size-heading);
     font-weight: 500;
-    letter-spacing: -0.01em;
+    line-height: var(--m);
     color: #545454;
     cursor: pointer;
     transition: color 0.15s ease;
@@ -102,26 +152,31 @@
   /* While settings are open the title reads as pressed into the chrome. */
   header h1.pressed { color: #111; }
   header h1.fail { color: #e11d48; }
-  header .meta { font-size: 13px; color: #666; }
+  header .meta { color: #666; }
   /* Masonry: projects flow into columns and fill whatever space there is.
      The container is one column + gap narrower so the rightmost slot
-     stays empty — columns never occupy the last column of the page. */
+     stays empty — columns never occupy the last column of the page. The
+     width is rounded down to whole columns so each one is exactly 17
+     modules and every column starts on a grid track. */
   #board {
-    columns: 340px;
-    column-gap: 48px;
-    width: calc(100% - 340px - 48px);
+    columns: var(--col);
+    column-gap: var(--m2);
+    width: max(
+      var(--col),
+      round(down, 100% - var(--col), var(--col) + var(--m2)) - var(--m2)
+    );
   }
   .project {
     break-inside: avoid;
     /* padding, not margin: a margin at a column break spills into the next
        column and pushes its first project down. */
-    padding-bottom: 44px;
+    padding-bottom: var(--m2);
     color: var(--c);
   }
   .project h2 {
-    font-size: 16px;
+    font-size: var(--type-size-heading);
     font-weight: 500;
-    margin-bottom: 4px;
+    line-height: var(--m);
     cursor: pointer;
     display: inline-block;
     text-decoration: none;
@@ -133,12 +188,11 @@
   html.side-west, html.side-west * { cursor: w-resize; }
   html.side-east, html.side-east * { cursor: e-resize; }
   .stamp {
-    font-size: 13px;
     font-weight: 400;
     opacity: 0.5;
     flex-shrink: 0;
     margin-left: auto;
-    padding-left: 12px;
+    padding-left: var(--m05);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
     min-width: 7.6em;
@@ -150,7 +204,7 @@
   /* Hit area covers the date; the mark is a 1px black line through its middle. */
   .stamp-handle {
     position: absolute;
-    left: 12px;
+    left: var(--m05);
     right: 0;
     top: 0;
     bottom: 0;
@@ -179,29 +233,26 @@
      the shared .stamp — a notch above the old extra fade (0.375) so the
      headline stamp is more legible, still quieter than the branch name. */
   .worktree .branch .stamp {
-    font-size: 13px;
     font-weight: 400;
     opacity: 0.5;
   }
-  /* Tight to the first branch — same 4px as h2 → count. Padding, not
+  /* One module under the count before the first branch. Padding, not
      margin, so CSS columns cannot discard it at a fragment break. */
-  .project .count { font-size: 13px; opacity: 0.55; padding-bottom: 22px; }
+  .project .count { opacity: 0.55; padding-bottom: var(--m); }
   .project .count.cycle {
     cursor: pointer;
     width: max-content;
     text-decoration: none;
   }
-  .project .error { font-size: 13px; opacity: 0.5; font-style: italic; }
-  .worktree { margin-bottom: 22px; }
+  .project .error { opacity: 0.5; font-style: italic; }
+  .worktree { margin-bottom: var(--m); }
   /* Same size, line-height and timestamp treatment as the commit rows so the
      branch line sits in the identical rhythm; weight alone sets it apart. */
   .worktree .branch {
-    font-size: 13px;
     font-weight: 500;
-    line-height: 1.45;
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: var(--m05);
     min-width: 0;
   }
   .worktree .branch .bname {
@@ -216,13 +267,12 @@
   }
   a.bname.draft { text-decoration: underline dashed; }
   /* Dirty copy is long ("2 changed files · last touched …"). If it cannot
-     shrink, a 340px column leaves the name with zero width. */
+     shrink, a 17-module column leaves the name with zero width. */
   .worktree .branch .dirty {
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
-    font-size: 12px;
     font-weight: 400;
     opacity: 0.7;
     -webkit-mask-image: linear-gradient(to right, #000 80%, transparent);
@@ -230,27 +280,22 @@
   }
   .worktree .empty,
   .log-body .empty {
-    font-size: 13px;
-    line-height: 1.45;
     opacity: 0.45;
     font-style: italic;
-    margin-top: 4px;
   }
   .worktree ul,
-  .log { list-style: none; margin-top: 4px; }
+  .log { list-style: none; }
   .worktree li,
   .log li {
-    font-size: 13px;
-    line-height: 1.45;
     opacity: 0.75;
     display: flex;
-    gap: 10px;
+    gap: var(--m05);
   }
   .worktree li .hash,
   .log li .hash {
     opacity: 0.55;
     flex-shrink: 0;
-    font-family: "SF Mono", Menlo, monospace;
+    font-family: "Iosevka", "SF Mono", Menlo, monospace;
     font-size: inherit;
   }
   .worktree li .subject,
@@ -263,30 +308,36 @@
     mask-image: linear-gradient(to right, #000 80%, transparent);
   }
   li .diff,
-  .branch .diff { flex-shrink: 0; opacity: 0.6; padding-left: 12px; white-space: nowrap; }
-  li .diff { font-size: inherit; }
-  .branch .diff { font-size: 12px; font-weight: 400; padding-left: 4px; }
+  .branch .diff { flex-shrink: 0; opacity: 0.6; padding-left: var(--m05); white-space: nowrap; }
+  .branch .diff { font-weight: 400; padding-left: var(--m025); }
   /* Deletions always sit in neutral grey — only additions carry the project
      color. Zero counts are omitted entirely. */
   li .diff .minus,
   .branch .diff .minus { color: #555; }
-  .main-tag { font-size: 12px; font-weight: 400; opacity: 0.55; }
+  .main-tag { font-weight: 400; opacity: 0.55; }
   /* Selection in the board's own grey, not the OS accent color. */
   ::selection { background: rgba(128, 128, 128, 0.35); }
   /* Settings as a full page, laid out with the same rhythm as the board. */
   #settings-page {
     display: grid;
-    gap: 40px;
+    gap: var(--m2);
     align-content: start;
   }
-  .sgroup h2 { font-size: 16px; font-weight: 500; margin-bottom: 14px; color: #111; }
-  /* Background + orientation share one row: two halves of the same 340px
-     lane the projects list uses, so the settings stay one column wide. */
+  .sgroup h2 {
+    font-size: var(--type-size-heading);
+    font-weight: 500;
+    line-height: var(--m);
+    margin-bottom: var(--m);
+    color: #111;
+  }
+  /* Background + orientation share one row: two halves of the same board
+     column the projects list uses, so the settings stay one column wide. */
   .sgroup-row {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 40px;
-    width: 340px;
+    /* 8 + 2 + 7 modules: the second half starts on a track, not mid-cell. */
+    grid-template-columns: calc(var(--m) * 8) 1fr;
+    gap: var(--m2);
+    width: var(--col);
   }
   #add-project, #cycle-bg { cursor: pointer; }
   /* Background / orientation: same idea as the title — clickable text,
@@ -295,10 +346,8 @@
   .sgroup label {
     display: block;
     position: relative;
-    font-size: 13px;
     color: #545454;
     cursor: pointer;
-    padding: 4px 0;
     transition: color 0.15s ease;
   }
   .sgroup label:hover { color: #6a6a6a; }
@@ -324,15 +373,13 @@
     white-space: nowrap;
     border: 0;
   }
-  /* Same 340px as a board project column — name + status on one row,
+  /* Same width as a board project column — name + status on one row,
      not stretched across the settings page. */
-  .plist { list-style: none; width: 340px; }
+  .plist { list-style: none; width: var(--col); }
   .plist li {
     display: flex;
     align-items: baseline;
-    gap: 12px;
-    font-size: 13px;
-    padding: 4px 0;
+    gap: var(--m05);
     cursor: pointer;
     color: var(--c);
   }
@@ -363,7 +410,6 @@
     border: none;
     color: inherit;
     font: inherit;
-    font-size: 13px;
     cursor: pointer;
     padding: 0;
     opacity: 0.75;
@@ -396,6 +442,48 @@
       opacity: 0.9;
     }
   }
+  /* DS one grid overlay (ds-grid): 19px cells, 1px rules, anchored top-left
+     like the content. Settings → Grid turns it on to check alignment. */
+  #grid {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    pointer-events: none;
+    background-image:
+      repeating-linear-gradient(
+        to right,
+        transparent 0,
+        transparent calc(19px * var(--sf)),
+        var(--grid-color) calc(19px * var(--sf)),
+        var(--grid-color) var(--m)
+      ),
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent calc(19px * var(--sf)),
+        var(--grid-color) calc(19px * var(--sf)),
+        var(--grid-color) var(--m)
+      );
+  }
+  /* iPhone / iOS home-screen app: DS one's mobile grid is 14 columns across
+     the viewport (--sf = width / 280). Content sits in the middle 12 with a
+     one-module gutter, and the board collapses to a single column. Safe-area
+     insets are rounded up to whole modules so rows stay on the grid. */
+  html.mobile body {
+    padding-top: calc(round(up, env(safe-area-inset-top, 0px), var(--m)) + var(--m));
+    padding-right: max(var(--m), round(up, env(safe-area-inset-right, 0px), var(--m)));
+    padding-bottom: calc(round(up, env(safe-area-inset-bottom, 0px), var(--m)) + var(--m4));
+    padding-left: max(var(--m), round(up, env(safe-area-inset-left, 0px), var(--m)));
+  }
+  html.mobile #board {
+    columns: auto;
+    width: auto;
+  }
+  html.mobile .plist,
+  html.mobile .sgroup-row { width: auto; }
+  /* Twelve modules is narrower than a desktop column: let the date take
+     only its own width so the commit subject keeps some room. */
+  html.mobile .stamp { min-width: 0; }
 </style>
 
 <header>
@@ -422,10 +510,47 @@
       <label><input type="checkbox" id="bg-flip" /> Upside down</label>
     </section>
   </div>
+  <section class="sgroup">
+    <h2>Grid</h2>
+    <label><input type="checkbox" id="grid-show" /> Show grid</label>
+  </section>
 </div>
 <div id="board"></div>
+<div id="grid" hidden></div>
 
 <script>
+  // DS one device scaling (DS1/0-face/device.ts): desktop stays at --sf 1;
+  // phones and touch tablets scale the whole grid to viewport / 280, so
+  // the iOS app keeps the desktop's proportions at any iPhone width.
+  (() => {
+    const root = document.documentElement;
+    function isMobile() {
+      const ua = navigator.userAgent || navigator.vendor || "";
+      const uaMobile =
+        /Mobile|Android|iP(ad|hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)|Windows Phone|Phone|Tablet/i.test(ua);
+      const touch = (navigator.maxTouchPoints || 0) > 1;
+      const narrow = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 820;
+      return uaMobile || (touch && narrow);
+    }
+    function applyScale() {
+      const mobile = isMobile();
+      root.classList.toggle("mobile", mobile);
+      root.classList.toggle("desktop", !mobile);
+      const sf = mobile
+        ? Number(Math.max(0.75, Math.min(2, root.clientWidth / 280)).toFixed(3))
+        : 1;
+      root.style.setProperty("--sf", String(sf));
+    }
+    let t = 0;
+    const later = () => {
+      clearTimeout(t);
+      t = setTimeout(applyScale, 100);
+    };
+    window.addEventListener("resize", later);
+    window.addEventListener("orientationchange", later);
+    applyScale();
+  })();
+
   const board = document.getElementById("board");
   const updated = document.getElementById("updated");
   const title = document.querySelector("header h1");
@@ -1374,6 +1499,8 @@
   const bg = document.getElementById("bg");
   const panel = document.getElementById("settings-page");
   const flipBox = document.getElementById("bg-flip");
+  const gridBox = document.getElementById("grid-show");
+  const gridOverlay = document.getElementById("grid");
   const stored = JSON.parse(localStorage.getItem("wt-settings") || "{}");
   if (stored.motive == null && ["a", "b", "c"].includes(stored.bg))
     stored.motive = stored.bg;
@@ -1385,7 +1512,7 @@
     stored.v4bg = 1;
   }
   const settings = Object.assign(
-    { motive: "a", dither: "fine", flip: true },
+    { motive: "a", dither: "fine", flip: true, grid: false },
     stored
   );
 
@@ -1405,6 +1532,8 @@
       r.checked = r.value === settings.dither;
     });
     flipBox.checked = settings.flip;
+    gridOverlay.hidden = !settings.grid;
+    gridBox.checked = !!settings.grid;
     localStorage.setItem("wt-settings", JSON.stringify(settings));
   }
 
@@ -1497,6 +1626,10 @@
   });
   flipBox.addEventListener("change", () => {
     settings.flip = flipBox.checked;
+    applySettings();
+  });
+  gridBox.addEventListener("change", () => {
+    settings.grid = gridBox.checked;
     applySettings();
   });
   applySettings();

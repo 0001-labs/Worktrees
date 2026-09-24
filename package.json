@@ -27,6 +27,7 @@
       "app/**",
       "server.js",
       "index.html",
+      "fonts/**",
       "background-a.png",
       "background-b.png",
       "background-c.png",

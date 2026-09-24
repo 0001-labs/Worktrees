@@ -740,6 +740,35 @@ const server = http.createServer(async (req, res) => {
     });
     return;
   }
+  // DS one fonts, bundled next to the page.
+  if (/^\/fonts\/[\w-]+\.woff2$/.test(url.pathname)) {
+    fs.readFile(path.join(__dirname, url.pathname.slice(1)), (err, font) => {
+      if (err) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "font/woff2",
+        "Cache-Control": "public, max-age=31536000, immutable",
+      });
+      res.end(font);
+    });
+    return;
+  }
+  // Home-screen icon when the board is added to an iPhone.
+  if (url.pathname === "/apple-touch-icon.png") {
+    fs.readFile(path.join(__dirname, "app", "icon-photo-1024.png"), (err, img) => {
+      if (err) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "image/png" });
+      res.end(img);
+    });
+    return;
+  }
   const page =
     url.pathname === "/site" || url.pathname === "/site.html"
       ? "site.html"
