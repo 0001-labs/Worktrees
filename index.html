@@ -443,7 +443,7 @@
     }
   }
   /* DS one grid overlay (ds-grid): 19px cells, 1px rules, anchored top-left
-     like the content. Settings → Grid turns it on to check alignment. */
+     like the content. Type ggg to toggle it, as on every 0001 page. */
   #grid {
     position: fixed;
     inset: 0;
@@ -464,6 +464,38 @@
         var(--grid-color) calc(19px * var(--sf)),
         var(--grid-color) var(--m)
       );
+  }
+  /* DS one layout view (ds-layout's view labels): type lll to tint each
+     named area and label it, to check what sits in which slot. Outline and
+     an absolute label only, so switching it on never moves anything. */
+  html.lll [data-area] {
+    position: relative;
+    background-color: color-mix(in srgb, #99ff73 25%, transparent);
+    outline: 1px solid color-mix(in srgb, #99ff73 60%, transparent);
+    outline-offset: -1px;
+  }
+  html.lll .project[data-area] {
+    background-color: color-mix(in srgb, #ccccff 25%, transparent);
+    outline-color: color-mix(in srgb, #ccccff 60%, transparent);
+  }
+  html.lll [data-area]::after {
+    content: attr(data-area);
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 0 var(--m025);
+    font-size: calc(10px * var(--sf));
+    line-height: var(--m);
+    font-weight: 400;
+    font-style: normal;
+    color: #ff5f5f;
+    pointer-events: none;
+  }
+  /* Containers label their bottom corner so the areas inside keep the top. */
+  html.lll #board::after,
+  html.lll #settings-page::after {
+    top: auto;
+    bottom: 0;
   }
   /* iPhone / iOS home-screen app: DS one's mobile grid is 14 columns across
      the viewport (--sf = width / 280). Content sits in the middle 12 with a
@@ -486,14 +518,14 @@
   html.mobile .stamp { min-width: 0; }
 </style>
 
-<header>
+<header data-area="header">
   <h1>Worktrees</h1>
   <div class="meta">
     <span id="updated"></span>
   </div>
 </header>
 <div id="bg"></div>
-<div id="settings-page" hidden>
+<div id="settings-page" data-area="settings" hidden>
   <section class="sgroup">
     <h2 id="add-project">Projects</h2>
     <ul id="settings-projects" class="plist"></ul>
@@ -510,12 +542,8 @@
       <label><input type="checkbox" id="bg-flip" /> Upside down</label>
     </section>
   </div>
-  <section class="sgroup">
-    <h2>Grid</h2>
-    <label><input type="checkbox" id="grid-show" /> Show grid</label>
-  </section>
 </div>
-<div id="board"></div>
+<div id="board" data-area="board"></div>
 <div id="grid" hidden></div>
 
 <script>
@@ -1251,6 +1279,7 @@
       const shown = uniqueWorktrees(project);
 
       const section = el("section", "project");
+      section.dataset.area = "project";
       tint(section, project.color);
       const hidden = soloProject && project.name !== soloProject;
       if (hidden) section.classList.add("off");
@@ -1499,8 +1528,6 @@
   const bg = document.getElementById("bg");
   const panel = document.getElementById("settings-page");
   const flipBox = document.getElementById("bg-flip");
-  const gridBox = document.getElementById("grid-show");
-  const gridOverlay = document.getElementById("grid");
   const stored = JSON.parse(localStorage.getItem("wt-settings") || "{}");
   if (stored.motive == null && ["a", "b", "c"].includes(stored.bg))
     stored.motive = stored.bg;
@@ -1512,7 +1539,7 @@
     stored.v4bg = 1;
   }
   const settings = Object.assign(
-    { motive: "a", dither: "fine", flip: true, grid: false },
+    { motive: "a", dither: "fine", flip: true },
     stored
   );
 
@@ -1532,8 +1559,6 @@
       r.checked = r.value === settings.dither;
     });
     flipBox.checked = settings.flip;
-    gridOverlay.hidden = !settings.grid;
-    gridBox.checked = !!settings.grid;
     localStorage.setItem("wt-settings", JSON.stringify(settings));
   }
 
@@ -1628,12 +1653,31 @@
     settings.flip = flipBox.checked;
     applySettings();
   });
-  gridBox.addEventListener("change", () => {
-    settings.grid = gridBox.checked;
-    applySettings();
-  });
   applySettings();
   renderSettingsProjects();
+
+  // 0001 page shortcuts: ggg toggles the DS one grid overlay, lll the
+  // layout view. Three presses of the same key, no modifiers, not while
+  // typing in a field.
+  const gridOverlay = document.getElementById("grid");
+  let keyRun = "";
+  let keyRunAt = 0;
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    if (e.target.closest && e.target.closest("input, textarea, [contenteditable]")) return;
+    const key = e.key.toLowerCase();
+    if (key !== "g" && key !== "l") {
+      keyRun = "";
+      return;
+    }
+    const now = Date.now();
+    keyRun = now - keyRunAt < 800 && keyRun.endsWith(key) ? keyRun + key : key;
+    keyRunAt = now;
+    if (keyRun.length < 3) return;
+    keyRun = "";
+    if (key === "g") gridOverlay.hidden = !gridOverlay.hidden;
+    else document.documentElement.classList.toggle("lll");
+  });
 
   // Live board: poll continuously; a failed poll replaces the title in red
   // and the next tick recovers on its own.
