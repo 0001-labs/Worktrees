@@ -16,3 +16,6 @@ dist-app/
 
 # Pages deploy output
 dist/
+
+# Phone link secret key (dev mode keeps it next to server.js)
+phone.json

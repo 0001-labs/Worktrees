@@ -12,6 +12,9 @@
     "build:site": "rm -rf dist && mkdir dist && cp site.html dist/index.html && cp background-*.png dist/",
     "deploy": "bun run build:site && bunx wrangler deploy"
   },
+  "dependencies": {
+    "qrcode-generator": "^2.0.4"
+  },
   "devDependencies": {
     "electron": "^38.2.0",
     "electron-builder": "^26.0.13"

@@ -6,6 +6,8 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { execFile } = require("child_process");
+const crypto = require("crypto");
+const qrcode = require("qrcode-generator");
 
 const PORT = Number(process.env.PORT) || 4777;
 // Packaged app: the bundle is read-only, so mutable state (projects.json,
@@ -506,6 +508,153 @@ async function rewriteCommitDate(cwd, rev, unixSeconds) {
   return rewrittenHash();
 }
 
+// Phone: the board can also be served to devices on the same Wi-Fi. Off by
+// default. When on, a second listener binds every interface on PHONE_PORT,
+// and any request that is not from this Mac must carry the secret key —
+// once as ?key= (the QR code in Settings holds it), then as a cookie. The
+// key lives in the data dir; "New code" rotates it and locks old phones out.
+const PHONE_PORT = Number(process.env.WORKTREES_PHONE_PORT) || 4778;
+const PHONE_FILE = path.join(DATA_DIR, "phone.json");
+const PHONE_COOKIE = "wt_key";
+// Mac-only endpoints: settings for the phone link itself, the native
+// folder picker, and the background upload.
+const MAC_ONLY = new Set(["/api/phone", "/api/projects/pick", "/api/background"]);
+let phoneServer = null;
+let phoneError = null;
+
+function newPhoneKey() {
+  return crypto.randomBytes(18).toString("base64url");
+}
+
+function loadPhone() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(PHONE_FILE, "utf8"));
+    if (raw && typeof raw.key === "string" && raw.key.length >= 16)
+      return { enabled: !!raw.enabled, key: raw.key };
+  } catch {}
+  return { enabled: false, key: newPhoneKey() };
+}
+
+let phone = loadPhone();
+
+function savePhone() {
+  fs.writeFileSync(PHONE_FILE, JSON.stringify(phone, null, 2) + "\n", { mode: 0o600 });
+}
+
+function isLoopback(addr) {
+  return addr === "127.0.0.1" || addr === "::1" || addr === "::ffff:127.0.0.1";
+}
+
+function lanAddress() {
+  const nets = os.networkInterfaces();
+  const names = ["en0", "en1", ...Object.keys(nets)];
+  for (const name of names) {
+    for (const a of nets[name] || []) {
+      if (a.family === "IPv4" && !a.internal && !a.address.startsWith("169.254."))
+        return a.address;
+    }
+  }
+  return null;
+}
+
+function sameKey(given) {
+  const a = Buffer.from(String(given || ""));
+  const b = Buffer.from(phone.key);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function cookieKey(req) {
+  const m = (req.headers.cookie || "").match(/(?:^|;\s*)wt_key=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+// Requests from this Mac pass untouched. Anything else needs the phone link
+// switched on and the key; a valid ?key= also sets the cookie so fonts,
+// images and API calls from the page carry it.
+function phoneGate(req, res, url) {
+  if (isLoopback(req.socket.remoteAddress)) return true;
+  if (!phone.enabled) {
+    res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Worktrees is not serving phones. Turn on Phone in Settings on the Mac.");
+    return false;
+  }
+  const fromQuery = url.searchParams.get("key");
+  if (!sameKey(fromQuery || cookieKey(req))) {
+    res.writeHead(401, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Scan the QR code under Settings → Phone in Worktrees on the Mac.");
+    return false;
+  }
+  if (MAC_ONLY.has(url.pathname)) {
+    json(res, 403, { error: "Only on the Mac" });
+    return false;
+  }
+  if (fromQuery) {
+    res.setHeader(
+      "Set-Cookie",
+      `${PHONE_COOKIE}=${encodeURIComponent(phone.key)}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax`
+    );
+  }
+  return true;
+}
+
+function qrSvg(text) {
+  const q = qrcode(0, "M");
+  q.addData(text);
+  q.make();
+  const n = q.getModuleCount();
+  const pad = 4;
+  let d = "";
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c + pad} ${r + pad}h1v1h-1z`;
+  const size = n + pad * 2;
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges">` +
+    `<rect width="${size}" height="${size}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`
+  );
+}
+
+function phoneStatus() {
+  const ip = lanAddress();
+  const running = !!phoneServer && phoneServer.listening;
+  const address = ip ? `${ip}:${PHONE_PORT}` : null;
+  const url = address ? `http://${address}/?key=${encodeURIComponent(phone.key)}` : null;
+  let error = phoneError;
+  if (phone.enabled && !ip) error = "No Wi-Fi address";
+  return {
+    enabled: phone.enabled,
+    running,
+    address,
+    url: phone.enabled ? url : null,
+    qr: phone.enabled && url && !error ? qrSvg(url) : null,
+    error: phone.enabled ? error : null,
+  };
+}
+
+function startPhoneServer() {
+  if (phoneServer) return Promise.resolve();
+  phoneError = null;
+  const s = http.createServer(handle);
+  phoneServer = s;
+  return new Promise((resolve) => {
+    s.once("listening", resolve);
+    s.once("error", (err) => {
+      phoneError =
+        err.code === "EADDRINUSE" ? `Port ${PHONE_PORT} is already in use` : String(err.message || err);
+      if (phoneServer === s) phoneServer = null;
+      resolve();
+    });
+    s.listen(PHONE_PORT, "0.0.0.0");
+  });
+}
+
+function stopPhoneServer() {
+  phoneError = null;
+  if (!phoneServer) return;
+  phoneServer.close();
+  if (phoneServer.closeAllConnections) phoneServer.closeAllConnections();
+  phoneServer = null;
+}
+
 // One rewrite at a time, globally: the client fires these in the background
 // now, and two rebases racing in the same repo corrupt each other.
 let rewriteChain = Promise.resolve();
@@ -515,8 +664,25 @@ function serializeRewrite(job) {
   return run;
 }
 
-const server = http.createServer(async (req, res) => {
+async function handle(req, res) {
   const url = new URL(req.url, "http://localhost");
+  if (!phoneGate(req, res, url)) return;
+
+  if (url.pathname === "/api/phone") {
+    if (req.method === "POST") {
+      if (url.searchParams.get("reset") === "1") {
+        phone.key = newPhoneKey();
+      }
+      if (url.searchParams.has("enabled")) {
+        phone.enabled = url.searchParams.get("enabled") === "1";
+      }
+      savePhone();
+      if (phone.enabled) await startPhoneServer();
+      else stopPhoneServer();
+    }
+    json(res, 200, phoneStatus());
+    return;
+  }
 
   if (url.pathname === "/api/log") {
     const project = loadProjects().find((p) => p.name === url.searchParams.get("project"));
@@ -782,7 +948,13 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(html);
   });
-});
+}
+
+const server = http.createServer(handle);
+
+// The phone link survives restarts: switched on once, the app serves the
+// phone again every time it launches.
+if (phone.enabled) startPhoneServer();
 
 // Run directly: listen on the fixed port. Required (by the Electron shell):
 // the caller picks the port and starts listening itself.
